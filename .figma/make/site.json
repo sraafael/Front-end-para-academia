@@ -1,0 +1,10 @@
+{
+  "description": "Manage gym operations efficiently with a user-friendly dashboard for member registration, financial tracking, and secure password recovery via WhatsApp.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
