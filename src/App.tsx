@@ -10,7 +10,7 @@ const SETUP_URL = ``
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
-  const logout = useAuthStore((s) => s.logout)
+  const clearSession = useAuthStore((s) => s.clearSession)
 
   useEffect(() => {
     // Restore session from Supabase on every page load
@@ -18,7 +18,7 @@ export default function App() {
 
     // React to Supabase auth state changes (token expiry, sign-out from another tab)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') logout()
+      if (event === 'SIGNED_OUT') clearSession()
     })
 
   // Run DB setup once per browser (creates tables + seeds test users)
@@ -47,7 +47,7 @@ export default function App() {
     }
     
     return () => subscription.unsubscribe()
-  }, [initialize, logout])
+  }, [initialize, clearSession])
 
   return <RouterProvider router={router} />
 }

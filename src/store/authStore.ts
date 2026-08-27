@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '../lib/supabase'
+import { useDataStore } from './dataStore'
 import type { UserRole } from '../types'
 
 interface AuthState {
@@ -14,13 +15,22 @@ interface AuthState {
 
   setAuth: (role: UserRole, userId: string | null) => void
   setPendingFirstLogin: (v: boolean) => void
-  logout: () => void
+  clearSession: () => void
+  logout: () => Promise<void>
   initialize: () => Promise<void>
 }
 
+const loggedOutState = {
+  role: null,
+  currentAlunoId: null,
+  currentProfessorId: null,
+  isAuthenticated: false,
+  pendingFirstLogin: false,
+} as const
+
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       role: null,
       currentAlunoId: null,
       currentProfessorId: null,
@@ -39,16 +49,16 @@ export const useAuthStore = create<AuthState>()(
 
       setPendingFirstLogin: (v) => set({ pendingFirstLogin: v }),
 
-      logout: () => {
-        // Fire-and-forget Supabase signout
-        supabase.auth.signOut().catch(() => null)
-        set({
-          role: null,
-          currentAlunoId: null,
-          currentProfessorId: null,
-          isAuthenticated: false,
-          pendingFirstLogin: false,
-        })
+      clearSession: () => {
+        useDataStore.getState().reset()
+        set(loggedOutState)
+      },
+
+      logout: async () => {
+        // Clear the UI immediately. The SIGNED_OUT listener only repeats this
+        // local cleanup and never calls signOut again.
+        get().clearSession()
+        await supabase.auth.signOut().catch(() => null)
       },
 
       initialize: async () => {

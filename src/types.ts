@@ -60,6 +60,7 @@ export interface Aluno {
   idade: number
   peso: number
   planoId: string
+  professorId?: string
   status: AlunoStatus
   turmaId?: string
   matriculaData: string

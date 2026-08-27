@@ -19,7 +19,7 @@ function getGreeting() {
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
-  const { alunos, professores, turmas, planos, transacoes, loadAll, loading } = useDataStore()
+  const { alunos, professores, turmas, planos, transacoes, loadAll, loading, error } = useDataStore()
 
   const [modal, setModal] = useState<ModalType>(null)
 
@@ -108,6 +108,21 @@ export default function AdminDashboard() {
             Novo Aluno
           </button>
         </div>
+
+        {error && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-red-500/10 border border-red-500/25 rounded-xl px-4 py-3">
+            <div className="flex-1">
+              <p className="text-red-400 text-sm font-semibold">Falha ao carregar os dados administrativos</p>
+              <p className="text-red-300/70 text-xs mt-0.5">{error}</p>
+            </div>
+            <button
+              onClick={() => void loadAll()}
+              className="text-xs font-semibold bg-red-500/15 hover:bg-red-500/25 text-red-300 px-3 py-2 rounded-lg transition-colors"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
 
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">

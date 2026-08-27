@@ -23,7 +23,7 @@ function AlunoPerfilModal({
   const [idade, setIdade] = useState(String(aluno.idade || ''))
   const [peso, setPeso] = useState(String(aluno.peso || ''))
   const [planoId, setPlanoId] = useState(aluno.planoId)
-  const [professorId, setProfessorId] = useState('')
+  const [professorId, setProfessorId] = useState(aluno.professorId ?? '')
   const [status, setStatus] = useState(aluno.status)
   const [pagamentoStatus, setPagamentoStatus] = useState(aluno.pagamentoStatus)
   const [formaPagamento, setFormaPagamento] = useState(aluno.formaPagamento)
@@ -390,8 +390,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
         turmaId: undefined,
         matriculaData: new Date().toISOString().split('T')[0],
         status: 'ativo',
-        formaPagamento: 'pix', 
-        pagamentoStatus: 'pago' 
+        formaPagamento: 'pix',
       })
       
       setShowCadastrar(false)
@@ -501,10 +500,13 @@ export default function GerenciarAlunos({ onClose }: Props) {
                 <select value={professorId} onChange={e => setProfessorId(e.target.value)}
                   className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e] transition-colors">
                   <option value="">Selecione o professor</option>
-                  {professores.map(p => (
+                  {professores.filter(p => p.status === 'ativo').map(p => (
                     <option key={p.id} value={p.id}>{p.nome}</option>
                   ))}
                 </select>
+                {professores.filter(p => p.status === 'ativo').length === 0 && (
+                  <p className="text-[#52525b] text-xs mt-1">Nenhum professor ativo disponível.</p>
+                )}
               </div>
             </div>
             {formError && (

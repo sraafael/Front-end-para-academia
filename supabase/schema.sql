@@ -23,11 +23,26 @@ create table if not exists profiles (
 );
 alter table profiles enable row level security;
 
+-- O papel administrativo usa app_metadata (não editável pelo usuário). O
+-- e-mail é mantido como compatibilidade com a conta admin já existente.
+create or replace function public.is_fitpro_admin()
+returns boolean
+language sql
+stable
+as $$
+  select
+    coalesce(auth.jwt() -> 'app_metadata' ->> 'role' = 'admin', false)
+    or lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@fitpro.internal';
+$$;
+
+revoke all on function public.is_fitpro_admin() from public;
+grant execute on function public.is_fitpro_admin() to authenticated;
+
 drop policy if exists "profiles: owner read"     on profiles;
 drop policy if exists "profiles: admin read all" on profiles;
 create policy "profiles: owner read"     on profiles for select using (auth.uid() = id);
 create policy "profiles: admin read all" on profiles for select using (
-  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+  public.is_fitpro_admin()
 );
 
 -- ── planos ───────────────────────────────────────────────────────────────────
@@ -47,7 +62,7 @@ drop policy if exists "planos: auth read"   on planos;
 drop policy if exists "planos: admin write" on planos;
 create policy "planos: auth read"   on planos for select using (auth.role() = 'authenticated');
 create policy "planos: admin write" on planos for all    using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  public.is_fitpro_admin()
 );
 
 -- ── professores ─────────────────────────────────────────────────────────────
@@ -69,7 +84,7 @@ alter table professores enable row level security;
 drop policy if exists "professores: admin all"  on professores;
 drop policy if exists "professores: own read"   on professores;
 create policy "professores: admin all" on professores for all    using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  public.is_fitpro_admin()
 );
 create policy "professores: own read" on professores for select using (user_id = auth.uid());
 
@@ -105,11 +120,14 @@ drop policy if exists "alunos: own read"       on alunos;
 drop policy if exists "alunos: own update"     on alunos;
 -- Admin: acesso total
 create policy "alunos: admin all" on alunos for all using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  public.is_fitpro_admin()
 );
--- Professor: leitura de todos os alunos (para chamada e dashboard)
+-- Professor: leitura dos alunos vinculados ao próprio perfil
 create policy "alunos: professor read" on alunos for select using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'professor')
+  exists (
+    select 1 from professores p
+    where p.user_id = auth.uid() and p.id = alunos.professor_id
+  )
 );
 -- Aluno: lê e atualiza apenas o próprio registro
 create policy "alunos: own read"   on alunos for select using (user_id = auth.uid());
@@ -136,7 +154,7 @@ drop policy if exists "turmas: auth read"   on turmas;
 drop policy if exists "turmas: admin write" on turmas;
 create policy "turmas: auth read"   on turmas for select using (auth.role() = 'authenticated');
 create policy "turmas: admin write" on turmas for all    using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  public.is_fitpro_admin()
 );
 
 -- ── historico_peso ───────────────────────────────────────────────────────────
@@ -152,7 +170,7 @@ alter table historico_peso enable row level security;
 drop policy if exists "historico_peso: admin all" on historico_peso;
 drop policy if exists "historico_peso: own all"   on historico_peso;
 create policy "historico_peso: admin all" on historico_peso for all using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  public.is_fitpro_admin()
 );
 create policy "historico_peso: own all" on historico_peso for all using (
   exists (select 1 from alunos where id = aluno_id and user_id = auth.uid())
@@ -173,10 +191,11 @@ drop policy if exists "frequencia: admin all"      on frequencia;
 drop policy if exists "frequencia: professor write" on frequencia;
 drop policy if exists "frequencia: own read"        on frequencia;
 create policy "frequencia: admin all" on frequencia for all using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  public.is_fitpro_admin()
 );
 create policy "frequencia: professor write" on frequencia for all using (
-  exists (select 1 from profiles where id = auth.uid() and role in ('admin','professor'))
+  public.is_fitpro_admin()
+  or exists (select 1 from professores p where p.user_id = auth.uid())
 );
 create policy "frequencia: own read" on frequencia for select using (
   exists (select 1 from alunos where id = aluno_id and user_id = auth.uid())
@@ -199,7 +218,7 @@ alter table transacoes enable row level security;
 
 drop policy if exists "transacoes: admin all" on transacoes;
 create policy "transacoes: admin all" on transacoes for all using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  public.is_fitpro_admin()
 );
 
 -- ── treinos ──────────────────────────────────────────────────────────────────
@@ -215,7 +234,8 @@ alter table treinos enable row level security;
 drop policy if exists "treinos: staff all" on treinos;
 drop policy if exists "treinos: own read"  on treinos;
 create policy "treinos: staff all" on treinos for all using (
-  exists (select 1 from profiles where id = auth.uid() and role in ('admin','professor'))
+  public.is_fitpro_admin()
+  or exists (select 1 from professores p where p.user_id = auth.uid())
 );
 -- Aluno só lê os próprios treinos
 create policy "treinos: own read" on treinos for select using (
@@ -237,7 +257,8 @@ alter table exercicios enable row level security;
 drop policy if exists "exercicios: staff all" on exercicios;
 drop policy if exists "exercicios: own read"  on exercicios;
 create policy "exercicios: staff all" on exercicios for all using (
-  exists (select 1 from profiles where id = auth.uid() and role in ('admin','professor'))
+  public.is_fitpro_admin()
+  or exists (select 1 from professores p where p.user_id = auth.uid())
 );
 create policy "exercicios: own read" on exercicios for select using (
   exists (
@@ -290,6 +311,19 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+-- Usuários criados antes do trigger também recebem um profile.
+insert into profiles (id, role)
+select
+  id,
+  case
+    when lower(email) = 'admin@fitpro.internal' then 'admin'::user_role
+    when raw_user_meta_data ->> 'role' in ('admin', 'professor', 'aluno')
+      then (raw_user_meta_data ->> 'role')::user_role
+    else 'aluno'::user_role
+  end
+from auth.users
+on conflict (id) do update set role = excluded.role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- SEED: usuários de teste

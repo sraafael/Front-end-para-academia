@@ -108,7 +108,9 @@ interface DataState {
   planos: Plano[]
   transacoes: Transacao[]
   loading: boolean
+  error: string | null
 
+  reset: () => void
   loadAll: () => Promise<void>
   loadAluno: (alunoId: string) => Promise<void>
 
@@ -129,77 +131,172 @@ interface DataState {
   
 }
 
-export const useDataStore = create<DataState>()((set, get) => ({
-  alunos: [],
-  professores: [],
-  turmas: [],
-  planos: [],
-  transacoes: [],
+const emptyData = () => ({
+  alunos: [] as Aluno[],
+  professores: [] as Professor[],
+  turmas: [] as Turma[],
+  planos: [] as Plano[],
+  transacoes: [] as Transacao[],
   loading: false,
+  error: null,
+})
+
+let dataGeneration = 0
+const activeLoadControllers = new Set<AbortController>()
+let activeLoadAll: { generation: number; promise: Promise<void> } | null = null
+const activeAlunoLoads = new Map<string, { generation: number; promise: Promise<void> }>()
+
+export const useDataStore = create<DataState>()((set, get) => ({
+  ...emptyData(),
+
+  // Release private dashboard data and stop pending responses from repopulating
+  // the store after the user has already left the session.
+  reset: () => {
+    dataGeneration += 1
+    activeLoadControllers.forEach(controller => controller.abort())
+    activeLoadControllers.clear()
+    activeLoadAll = null
+    activeAlunoLoads.clear()
+    set(emptyData())
+  },
 
   // ── Load all data (admin / professor dashboards) ────────────────────────
-  loadAll: async () => {
-    set({ loading: true })
-    const [alunosRes, professoresRes, turmasRes, planosRes, transacoesRes] = await Promise.all([
-      supabase.from('alunos').select('*').order('nome'),
-      supabase.from('professores').select('*').order('nome'),
-      supabase.from('turmas').select('*').order('nome'),
-      supabase.from('planos').select('*').order('nome'),
-      supabase.from('transacoes').select('*').order('data', { ascending: false }),
+  loadAll: () => {
+    if (activeLoadAll?.generation === dataGeneration) {
+      return activeLoadAll.promise
+    }
+
+    const generation = dataGeneration
+    const controller = new AbortController()
+    activeLoadControllers.add(controller)
+    set({ loading: true, error: null })
+
+    const promise = Promise.all([
+      supabase.from('alunos').select('*').order('nome').abortSignal(controller.signal),
+      supabase.from('professores').select('*').order('nome').abortSignal(controller.signal),
+      supabase.from('turmas').select('*').order('nome').abortSignal(controller.signal),
+      supabase.from('planos').select('*').order('nome').abortSignal(controller.signal),
+      supabase.from('transacoes').select('*').order('data', { ascending: false }).abortSignal(controller.signal),
     ])
-    set({
-      loading: false,
-      alunos:      (alunosRes.data ?? []).map(r => mapAluno(r as Record<string, unknown>)),
-      professores: (professoresRes.data ?? []).map(r => mapProfessor(r as Record<string, unknown>)),
-      turmas:      (turmasRes.data ?? []).map(r => mapTurma(r as Record<string, unknown>)),
-      planos:      (planosRes.data ?? []).map(r => mapPlano(r as Record<string, unknown>)),
-      transacoes:  (transacoesRes.data ?? []).map(r => mapTransacao(r as Record<string, unknown>)),
-    })
+      .then(([alunosRes, professoresRes, turmasRes, planosRes, transacoesRes]) => {
+        if (controller.signal.aborted || generation !== dataGeneration) return
+
+        const failures = [
+          ['alunos', alunosRes.error],
+          ['professores', professoresRes.error],
+          ['turmas', turmasRes.error],
+          ['planos', planosRes.error],
+          ['transações', transacoesRes.error],
+        ].filter((entry): entry is [string, NonNullable<typeof alunosRes.error>] => entry[1] !== null)
+
+        if (failures.length > 0) {
+          const resources = failures.map(([resource]) => resource).join(', ')
+          throw new Error(`Não foi possível carregar ${resources}: ${failures[0][1].message}`)
+        }
+
+        set({
+          loading: false,
+          error: null,
+          alunos:      (alunosRes.data ?? []).map(r => mapAluno(r as Record<string, unknown>)),
+          professores: (professoresRes.data ?? []).map(r => mapProfessor(r as Record<string, unknown>)),
+          turmas:      (turmasRes.data ?? []).map(r => mapTurma(r as Record<string, unknown>)),
+          planos:      (planosRes.data ?? []).map(r => mapPlano(r as Record<string, unknown>)),
+          transacoes:  (transacoesRes.data ?? []).map(r => mapTransacao(r as Record<string, unknown>)),
+        })
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted && generation === dataGeneration) {
+          set({
+            loading: false,
+            error: error instanceof Error ? error.message : 'Não foi possível carregar os dados.',
+          })
+        }
+      })
+      .finally(() => {
+        activeLoadControllers.delete(controller)
+        if (activeLoadAll?.promise === promise) activeLoadAll = null
+      })
+
+    activeLoadAll = { generation, promise }
+    return promise
   },
 
   // ── Load a single aluno with full related data (aluno dashboard) ─────────
-  loadAluno: async (alunoId) => {
-    const [alunoRes, pesoRes, freqRes, treinosRes] = await Promise.all([
-      supabase.from('alunos').select('*').eq('id', alunoId).single(),
-      supabase.from('historico_peso').select('*').eq('aluno_id', alunoId).order('data'),
-      supabase.from('frequencia').select('*').eq('aluno_id', alunoId).order('data'),
-      supabase.from('treinos').select('*, exercicios(*, series_realizadas(*))').eq('aluno_id', alunoId),
+  loadAluno: (alunoId) => {
+    const activeLoad = activeAlunoLoads.get(alunoId)
+    if (activeLoad?.generation === dataGeneration) return activeLoad.promise
+
+    const generation = dataGeneration
+    const controller = new AbortController()
+    activeLoadControllers.add(controller)
+    set({ loading: true, error: null })
+
+    const promise = Promise.all([
+      supabase.from('alunos').select('*').eq('id', alunoId).abortSignal(controller.signal).single(),
+      supabase.from('historico_peso').select('*').eq('aluno_id', alunoId).order('data').abortSignal(controller.signal),
+      supabase.from('frequencia').select('*').eq('aluno_id', alunoId).order('data').abortSignal(controller.signal),
+      supabase.from('treinos').select('*, exercicios(*, series_realizadas(*))').eq('aluno_id', alunoId).abortSignal(controller.signal),
     ])
-    if (!alunoRes.data) return
+      .then(([alunoRes, pesoRes, freqRes, treinosRes]) => {
+        if (controller.signal.aborted || generation !== dataGeneration) return
+        if (!alunoRes.data) {
+          set({ loading: false, error: alunoRes.error?.message ?? 'Perfil de aluno não encontrado.' })
+          return
+        }
 
-    const historicoPeso: HistoricoPesoEntry[] = (pesoRes.data ?? []).map((p: Record<string, unknown>) => ({
-      data: p.data as string,
-      peso: Number(p.peso),
-    }))
-    const frequencia: FrequenciaEntry[] = (freqRes.data ?? []).map((f: Record<string, unknown>) => ({
-      data: f.data as string,
-      presente: f.presente as boolean,
-    }))
-    const treinos: TreinoFicha[] = (treinosRes.data ?? []).map((t: Record<string, unknown>) => ({
-      id:    t.id as string,
-      nome:  t.nome as string,
-      grupo: t.grupo as string,
-      exercicios: ((t.exercicios as Record<string, unknown>[]) ?? []).map(ex => ({
-        id:             ex.id as string,
-        nome:           ex.nome as string,
-        series:         Number(ex.series),
-        reps:           Number(ex.reps),
-        cargaSugerida:  Number(ex.carga_sugerida),
-        seriesRealizadas: ((ex.series_realizadas as Record<string, unknown>[]) ?? []).map(sr => ({
-          serieNum:   Number(sr.serie_num),
-          cargaReal:  Number(sr.carga_real),
-          repeticoes: Number(sr.repeticoes),
-          concluida:  sr.concluida as boolean,
-        })),
-      })),
-    }))
+        const historicoPeso: HistoricoPesoEntry[] = (pesoRes.data ?? []).map((p: Record<string, unknown>) => ({
+          data: p.data as string,
+          peso: Number(p.peso),
+        }))
+        const frequencia: FrequenciaEntry[] = (freqRes.data ?? []).map((f: Record<string, unknown>) => ({
+          data: f.data as string,
+          presente: f.presente as boolean,
+        }))
+        const treinos: TreinoFicha[] = (treinosRes.data ?? []).map((t: Record<string, unknown>) => ({
+          id:    t.id as string,
+          nome:  t.nome as string,
+          grupo: t.grupo as string,
+          exercicios: ((t.exercicios as Record<string, unknown>[]) ?? []).map(ex => ({
+            id:             ex.id as string,
+            nome:           ex.nome as string,
+            series:         Number(ex.series),
+            reps:           Number(ex.reps),
+            cargaSugerida:  Number(ex.carga_sugerida),
+            seriesRealizadas: ((ex.series_realizadas as Record<string, unknown>[]) ?? []).map(sr => ({
+              serieNum:   Number(sr.serie_num),
+              cargaReal:  Number(sr.carga_real),
+              repeticoes: Number(sr.repeticoes),
+              concluida:  sr.concluida as boolean,
+            })),
+          })),
+        }))
 
-    const aluno = mapAluno(alunoRes.data as Record<string, unknown>, historicoPeso, frequencia, treinos)
-    set(s => ({
-      alunos: s.alunos.some(a => a.id === alunoId)
-        ? s.alunos.map(a => a.id === alunoId ? aluno : a)
-        : [...s.alunos, aluno],
-    }))
+        const aluno = mapAluno(alunoRes.data as Record<string, unknown>, historicoPeso, frequencia, treinos)
+        set(s => ({
+          loading: false,
+          error: null,
+          alunos: s.alunos.some(a => a.id === alunoId)
+            ? s.alunos.map(a => a.id === alunoId ? aluno : a)
+            : [...s.alunos, aluno],
+        }))
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted && generation === dataGeneration) {
+          set({
+            loading: false,
+            error: error instanceof Error ? error.message : 'Não foi possível carregar o perfil do aluno.',
+          })
+        }
+      })
+      .finally(() => {
+        activeLoadControllers.delete(controller)
+        if (activeAlunoLoads.get(alunoId)?.promise === promise) {
+          activeAlunoLoads.delete(alunoId)
+        }
+      })
+
+    activeAlunoLoads.set(alunoId, { generation, promise })
+    return promise
   },
 
   // ── Mutations ─────────────────────────────────────────────────────────────
