@@ -5,6 +5,85 @@ import type { Aluno, Plano, TreinoFicha } from '../../types'
 import { CONQUISTAS_CATALOGO } from '../../constants'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
+import { subtractLocalDays, toLocalDate } from '../../lib/date'
+
+const PREVIEW_PLAN: Plano = {
+  id: 'preview-plano',
+  nome: 'Plano Completo',
+  preco: 129.90,
+  duracao: '1 mês',
+  modalidades: ['Musculação', 'Funcional'],
+  beneficios: ['Acesso livre', 'Avaliação física'],
+  ativo: true,
+}
+
+const PREVIEW_ALUNO: Aluno = {
+  id: 'preview-aluno',
+  nome: 'Perfil de Aluno',
+  cpf: '',
+  senha: '',
+  telefone: '(00) 00000-0000',
+  email: 'aluno@academia.com',
+  idade: 26,
+  peso: 74.5,
+  planoId: PREVIEW_PLAN.id,
+  status: 'ativo',
+  matriculaData: subtractLocalDays(45),
+  isFirstLogin: false,
+  historicoPeso: [
+    { data: subtractLocalDays(40), peso: 77.2 },
+    { data: subtractLocalDays(25), peso: 76.1 },
+    { data: subtractLocalDays(10), peso: 75.2 },
+    { data: toLocalDate(), peso: 74.5 },
+  ],
+  frequencia: [
+    { data: subtractLocalDays(4), presente: true },
+    { data: subtractLocalDays(2), presente: true },
+  ],
+  treinos: [{
+    id: 'preview-treino-a',
+    nome: 'Treino A',
+    grupo: 'Peito e tríceps',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    exercicios: [
+      {
+        id: 'preview-supino',
+        nome: 'Supino reto',
+        series: 3,
+        reps: 10,
+        cargaSugerida: 30,
+        seriesRealizadas: [1, 2, 3].map((serieNum, index) => ({
+          serieNum,
+          cargaReal: 30,
+          repeticoes: 10,
+          concluida: index === 0,
+        })),
+      },
+      {
+        id: 'preview-triceps',
+        nome: 'Tríceps na polia',
+        series: 3,
+        reps: 12,
+        cargaSugerida: 20,
+        seriesRealizadas: [1, 2, 3].map(serieNum => ({
+          serieNum,
+          cargaReal: 20,
+          repeticoes: 12,
+          concluida: false,
+        })),
+      },
+    ],
+  }],
+  sequencia: 3,
+  metaSemanal: { meta: 3, concluidos: 2 },
+  conquistasDesbloqueadas: CONQUISTAS_CATALOGO.slice(0, 2).map(conquista => conquista.id),
+  formaPagamento: 'PIX',
+  pagamentoStatus: 'pago',
+  vencimento: subtractLocalDays(-15),
+}
+
+// ── Saudação e mensagem contextual ─────────────────────────────────────
 
 function getGreeting(nome: string): string {
   const h = new Date().getHours()
@@ -18,7 +97,7 @@ function getGreeting(nome: string): string {
 function getFraseDinamica(aluno: Aluno): string {
   const h = new Date().getHours()
   const diasSemana = new Date().getDay()
-  const treinou = aluno.frequencia.some(f => f.data === new Date().toISOString().split('T')[0] && f.presente)
+  const treinou = aluno.frequencia.some(f => f.data === toLocalDate() && f.presente)
 
   if (treinou) return '✅ Você já treinou hoje. Ótimo trabalho, continue assim!'
   if (aluno.pagamentoStatus === 'atrasado') return '⚠️ Sua mensalidade está em atraso. Regularize para continuar treinando.'
@@ -39,6 +118,8 @@ const NIVEL_CORES = {
   platina: 'text-cyan-300 bg-cyan-400/10 border-cyan-400/30',
 }
 
+// ── Resumo da meta semanal ────────────────────────────────────────────
+
 function MetaSemanalCard({ aluno }: { aluno: Aluno }) {
   const hoje = new Date()
   const diasSemana: { date: Date; label: string; presente: boolean }[] = []
@@ -49,7 +130,7 @@ function MetaSemanalCard({ aluno }: { aluno: Aluno }) {
   for (let i = 0; i < 7; i++) {
     const d = new Date(inicioSemana)
     d.setDate(inicioSemana.getDate() + i)
-    const dateStr = d.toISOString().split('T')[0]
+    const dateStr = toLocalDate(d)
     const presente = aluno.frequencia.some(f => f.data === dateStr && f.presente)
     diasSemana.push({ date: d, label: ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'][i], presente })
   }
@@ -85,6 +166,8 @@ function MetaSemanalCard({ aluno }: { aluno: Aluno }) {
     </div>
   )
 }
+
+// ── Modal de conquistas ─────────────────────────────────────────────────
 
 function ConquistasModal({ aluno, onClose }: { aluno: Aluno; onClose: () => void }) {
   return (
@@ -123,8 +206,12 @@ function ConquistasModal({ aluno, onClose }: { aluno: Aluno; onClose: () => void
   )
 }
 
-function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onClose: () => void; onAtualizar: (p: number) => void }) {
+// ── Modal de evolução do peso ─────────────────────────────────────────
+
+function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onClose: () => void; onAtualizar: (p: number) => Promise<void> }) {
   const [novoPeso, setNovoPeso] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const chartData = aluno.historicoPeso.map(h => ({
     data: new Date(h.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
@@ -202,15 +289,28 @@ function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onC
                 className="flex-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e] font-mono"
               />
               <button
-                onClick={() => {
+                onClick={async () => {
                   const p = parseFloat(novoPeso.replace(',', '.'))
-                  if (p > 0) { onAtualizar(p); setNovoPeso('') }
+                  if (p <= 0) return
+                  setSaving(true)
+                  setSaveError('')
+                  try {
+                    await onAtualizar(p)
+                    setNovoPeso('')
+                    onClose()
+                  } catch (err) {
+                    setSaveError(err instanceof Error ? err.message : 'Não foi possível salvar o peso.')
+                  } finally {
+                    setSaving(false)
+                  }
                 }}
+                disabled={saving}
                 className="bg-[#22c55e] hover:bg-[#16a34a] text-black font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors"
               >
-                Salvar
+                {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
+            {saveError && <p className="text-red-300 text-xs mt-2">{saveError}</p>}
           </div>
         </div>
       </div>
@@ -218,8 +318,11 @@ function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onC
   )
 }
 
-function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie: (exId: string, serieNum: number, carga: number, reps: number) => void }) {
+// ── Execução da ficha de treino ────────────────────────────────────────
+
+function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie: (exId: string, serieNum: number, carga: number, reps: number) => Promise<void> }) {
   const [cargas, setCargas] = useState<Record<string, Record<number, { carga: string; reps: string }>>>({})
+  const [saveError, setSaveError] = useState('')
 
   const getVal = (exId: string, serieNum: number, campo: 'carga' | 'reps', padrao: number) =>
     cargas[exId]?.[serieNum]?.[campo] ?? String(padrao)
@@ -246,6 +349,7 @@ function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie
         <div className="w-full bg-[#1a1a1a] rounded-full h-1 mb-5">
           <div className="bg-[#22c55e] h-1 rounded-full transition-all" style={{ width: `${pct}%` }} />
         </div>
+        {saveError && <p className="text-red-300 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 mb-4">{saveError}</p>}
 
         <div className="space-y-4">
           {treino.exercicios.map(ex => (
@@ -289,7 +393,14 @@ function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie
                         </div>
                       </div>
                       <button
-                        onClick={() => onCheckSerie(ex.id, sr.serieNum, parseFloat(cargaVal) || 0, parseInt(repsVal) || 0)}
+                        onClick={async () => {
+                          setSaveError('')
+                          try {
+                            await onCheckSerie(ex.id, sr.serieNum, parseFloat(cargaVal) || 0, parseInt(repsVal) || 0)
+                          } catch (err) {
+                            setSaveError(err instanceof Error ? err.message : 'Não foi possível salvar a série.')
+                          }
+                        }}
                         className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors flex-shrink-0 border ${
                           concluida
                             ? 'bg-[#22c55e]/15 border-[#22c55e]/30 text-[#22c55e]'
@@ -310,6 +421,8 @@ function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie
   )
 }
 
+// ── Mensalidade e forma de pagamento ─────────────────────────────────────
+
 function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefined }) {
   const [showPix, setShowPix] = useState(false)
 
@@ -328,8 +441,8 @@ function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefin
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-sm">
           <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
             <div>
-              <h2 className="font-bold text-white font-mono">Pagar com PIX</h2>
-              <p className="text-[#71717a] text-xs">Escaneie o QR Code ou copie a chave PIX para realizar o pagamento.</p>
+              <h2 className="font-bold text-white font-mono">Instruções de PIX</h2>
+              <p className="text-[#71717a] text-xs">Demonstração visual: este QR Code ainda não gera nem confirma uma cobrança real.</p>
             </div>
             <button onClick={() => setShowPix(false)} className="text-[#52525b] hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -353,7 +466,7 @@ function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefin
                 <rect x="5" y="45" width="10" height="10" fill="#22c55e" rx="1" />
                 <rect x="20" y="45" width="10" height="10" fill="#22c55e" rx="1" />
               </svg>
-              <p className="text-[#52525b] text-xs mt-3">QR Code PIX</p>
+              <p className="text-yellow-300/70 text-xs mt-3">QR Code ilustrativo</p>
             </div>
 
             <div className="bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl p-4">
@@ -417,7 +530,7 @@ function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefin
               <rect x="5" y="60" width="35" height="35" rx="4" stroke="currentColor" strokeWidth="8" fill="none" />
               <rect x="60" y="60" width="35" height="35" fill="currentColor" rx="4" />
             </svg>
-            Pagar com PIX
+            Ver instruções de PIX
           </button>
         )}
       </div>
@@ -439,22 +552,24 @@ function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefin
   )
 }
 
+// ── Painel principal do aluno ───────────────────────────────────────────
+
 export default function AlunoDashboard() {
   const navigate = useNavigate()
-  const { currentAlunoId, logout } = useAuthStore()
+  const { currentAlunoId, logout, isPreviewMode, exitPreview } = useAuthStore()
   const { alunos, planos, loadAluno, updatePeso, checkSerie, loading } = useDataStore()
   
-  const aluno = alunos.find(a => a.id === currentAlunoId)
-  const plano = planos.find(p => p.id === aluno?.planoId)
+  const aluno = isPreviewMode ? PREVIEW_ALUNO : alunos.find(a => a.id === currentAlunoId)
+  const plano = isPreviewMode ? PREVIEW_PLAN : planos.find(p => p.id === aluno?.planoId)
 
-  // 1. TODOS OS HOOKS NO TOPO: Nada de retornos precoces antes disso
+  // ── Estado local e carregamento ────────────────────────────────────────
   const [tab, setTab] = useState<string>('mensalidade')
   const [showConquistas, setShowConquistas] = useState(false)
   const [showPeso, setShowPeso] = useState(false)
 
   useEffect(() => {
-    if (currentAlunoId) loadAluno(currentAlunoId)
-  }, [currentAlunoId, loadAluno])
+    if (currentAlunoId && !isPreviewMode) loadAluno(currentAlunoId)
+  }, [currentAlunoId, isPreviewMode, loadAluno])
 
   useEffect(() => {
     if (aluno?.treinos && aluno.treinos.length > 0) {
@@ -462,7 +577,7 @@ export default function AlunoDashboard() {
     }
   }, [aluno])
 
-  // 2. RETORNOS PRECOCES: Agora eles não bloqueiam a leitura dos hooks
+  // ── Estados de carregamento e perfil ausente ───────────────────────────────
   if (loading && !aluno) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -473,13 +588,20 @@ export default function AlunoDashboard() {
   
   if (!aluno) return null
 
-  // 3. FUNÇÕES COMUNS
+  // ── Ações do painel ─────────────────────────────────────────────────────
   const onLogout = () => { logout(); navigate('/login') }
-  const onUpdatePeso = (p: number) => updatePeso(aluno.id, p)
+  const onExitPreview = () => { exitPreview(); navigate('/admin/dashboard') }
+  const onUpdatePeso = (p: number) => isPreviewMode
+    ? Promise.reject(new Error('Modo de visualização: nenhuma alteração foi salva.'))
+    : updatePeso(aluno.id, p)
   const onCheckSerie = (treinoId: string, exId: string, sn: number, carga: number, reps: number) =>
-    checkSerie(aluno.id, treinoId, exId, sn, carga, reps)
+    isPreviewMode
+      ? Promise.reject(new Error('Modo de visualização: nenhuma alteração foi salva.'))
+      : checkSerie(aluno.id, treinoId, exId, sn, carga, reps)
 
   const pesoAtual = aluno.historicoPeso[aluno.historicoPeso.length - 1]?.peso
+
+  // ── Interface principal ────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -495,15 +617,31 @@ export default function AlunoDashboard() {
             <p className="text-[#52525b] text-xs">Meu Treino</p>
           </div>
         </div>
-        <button onClick={onLogout} className="flex items-center gap-2 text-[#71717a] hover:text-white transition-colors text-sm">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-          </svg>
-          Sair
-        </button>
+        <div className="flex items-center gap-2">
+          {isPreviewMode && (
+            <button onClick={onExitPreview} className="bg-[#22c55e] hover:bg-[#16a34a] text-black font-semibold text-xs sm:text-sm px-3 py-2 rounded-xl transition-colors">
+              Voltar para administração
+            </button>
+          )}
+          <button onClick={onLogout} className="hidden sm:flex items-center gap-2 text-[#71717a] hover:text-white transition-colors text-sm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+            </svg>
+            Sair
+          </button>
+        </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {isPreviewMode && (
+          <div className="bg-[#22c55e]/10 border border-[#22c55e]/30 rounded-2xl px-4 py-3 flex items-start gap-3">
+            <span className="text-[#22c55e]">👁</span>
+            <div>
+              <p className="text-[#22c55e] text-sm font-semibold">Visualização do perfil de aluno</p>
+              <p className="text-[#a1a1aa] text-xs mt-0.5">Os dados desta tela são demonstrativos e nenhuma alteração será gravada.</p>
+            </div>
+          </div>
+        )}
         {/* Greeting */}
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white font-mono">{getGreeting(aluno.nome)}</h1>
@@ -622,7 +760,7 @@ export default function AlunoDashboard() {
       </main>
 
       {showConquistas && <ConquistasModal aluno={aluno} onClose={() => setShowConquistas(false)} />}
-      {showPeso && <HistoricoPesoModal aluno={aluno} onClose={() => setShowPeso(false)} onAtualizar={p => { onUpdatePeso(p); setShowPeso(false) }} />}
+      {showPeso && <HistoricoPesoModal aluno={aluno} onClose={() => setShowPeso(false)} onAtualizar={onUpdatePeso} />}
     </div>
   )
 }

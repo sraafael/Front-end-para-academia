@@ -3,6 +3,8 @@ import { useDataStore } from '../../../store/dataStore'
 
 interface Props { onClose: () => void }
 
+// ── Opções e utilitários do formulário ─────────────────────────────────
+
 const MODALIDADES_OPCOES = ['Musculação', 'Funcional', 'Crossfit', 'Personal', 'Pilates', 'Natação', 'HIIT', 'Yoga', 'Hidroginástica']
 const BENEFICIOS_OPCOES = [
   'Acesso livre à musculação', 'Aulas coletivas inclusas', 'Armário',
@@ -18,9 +20,24 @@ function formatPreco(v: string) {
   return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+function getPlanSaveError(error: unknown) {
+  if (!(error instanceof Error)) return 'Não foi possível salvar o plano. Tente novamente.'
+  const message = error.message.toLowerCase()
+  if (message.includes('duplicate key') || message.includes('planos_nome_key')) {
+    return 'Já existe um plano com esse nome. Escolha outro nome.'
+  }
+  if (message.includes('row-level security') || message.includes('permission denied')) {
+    return 'Seu acesso administrativo não possui permissão para salvar planos. Entre novamente e tente de novo.'
+  }
+  return `Não foi possível salvar o plano: ${error.message}`
+}
+
 export default function Planos({ onClose }: Props) {
-  const { planos, addPlano } = useDataStore()
+  // ── Dados e estado do formulário ──────────────────────────────────────
+
+  const { planos, addPlano, updatePlano } = useDataStore()
   const [showCriar, setShowCriar] = useState(false)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
   const [nome, setNome] = useState('')
   const [preco, setPreco] = useState('')
   const [duracao, setDuracao] = useState('')
@@ -37,6 +54,32 @@ export default function Planos({ onClose }: Props) {
 
   const [saving, setSaving] = useState(false)
 
+  // ── Limpeza, edição e gravação ──────────────────────────────────────
+
+  const limparFormulario = () => {
+    setNome('')
+    setPreco('')
+    setDuracao('')
+    setModalidades([])
+    setBeneficios([])
+    setBeneficioCustom('')
+    setFormError('')
+    setEditandoId(null)
+  }
+
+  const abrirEdicao = (id: string) => {
+    const plano = planos.find(item => item.id === id)
+    if (!plano) return
+    setEditandoId(plano.id)
+    setNome(plano.nome)
+    setPreco(plano.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+    setDuracao(plano.duracao)
+    setModalidades(plano.modalidades)
+    setBeneficios(plano.beneficios)
+    setFormError('')
+    setShowCriar(true)
+  }
+
   const handleCriar = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
@@ -45,11 +88,15 @@ export default function Planos({ onClose }: Props) {
     if (!duracao) { setFormError('Selecione a duração.'); return }
     setSaving(true)
     try {
-      await addPlano({ nome: nome.trim(), preco: precoNumerico, duracao, modalidades, beneficios, ativo: true })
+      if (editandoId) {
+        await updatePlano(editandoId, { nome: nome.trim(), preco: precoNumerico, duracao, modalidades, beneficios })
+      } else {
+        await addPlano({ nome: nome.trim(), preco: precoNumerico, duracao, modalidades, beneficios, ativo: true })
+      }
       setShowCriar(false)
-      setNome(''); setPreco(''); setDuracao(''); setModalidades([]); setBeneficios([]); setFormError('')
+      limparFormulario()
     } catch (err) {
-      setFormError('Erro ao salvar plano. Tente novamente.')
+      setFormError(getPlanSaveError(err))
     } finally {
       setSaving(false)
     }
@@ -60,16 +107,18 @@ export default function Planos({ onClose }: Props) {
 
   const nivelColor = (preco: number) => preco < 100 ? 'text-[#22c55e] bg-[#22c55e]/10' : preco < 200 ? 'text-blue-400 bg-blue-400/10' : 'text-yellow-400 bg-yellow-400/10'
 
+  // ── Formulário de criação e edição ───────────────────────────────────
+
   if (showCriar) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
           <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
             <div>
-              <h2 className="font-bold text-white font-mono">Criar Novo Plano</h2>
-              <p className="text-[#71717a] text-xs">Monte o plano com modalidades e benefícios</p>
+              <h2 className="font-bold text-white font-mono">{editandoId ? 'Editar Plano' : 'Criar Novo Plano'}</h2>
+              <p className="text-[#71717a] text-xs">{editandoId ? 'Atualize preço, duração e benefícios' : 'Monte o plano com modalidades e benefícios'}</p>
             </div>
-            <button onClick={() => setShowCriar(false)} className="text-[#52525b] hover:text-white">
+            <button onClick={() => { setShowCriar(false); limparFormulario() }} className="text-[#52525b] hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
@@ -192,11 +241,11 @@ export default function Planos({ onClose }: Props) {
           </div>
 
             <div className="flex gap-2 p-5 border-t border-[#1f1f1f]">
-              <button type="button" onClick={() => { setShowCriar(false); setFormError('') }}
+              <button type="button" onClick={() => { setShowCriar(false); limparFormulario() }}
                 className="flex-1 bg-[#1a1a1a] hover:bg-[#222] text-white rounded-xl py-3 text-sm transition-colors">Cancelar</button>
               <button type="submit" disabled={saving}
                 className="flex-1 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-60 disabled:cursor-not-allowed text-black font-semibold rounded-xl py-3 text-sm transition-colors">
-                {saving ? 'Salvando...' : 'Criar Plano'}
+                {saving ? 'Salvando...' : editandoId ? 'Salvar alterações' : 'Criar Plano'}
               </button>
             </div>
           </form>
@@ -204,6 +253,8 @@ export default function Planos({ onClose }: Props) {
       </div>
     )
   }
+
+  // ── Lista de planos ───────────────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -219,7 +270,7 @@ export default function Planos({ onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-auto p-5 space-y-4">
-          <button onClick={() => setShowCriar(true)}
+          <button onClick={() => { limparFormulario(); setShowCriar(true) }}
             className="w-full flex items-center justify-center gap-2 bg-[#22c55e] hover:bg-[#16a34a] text-black font-semibold text-sm py-3.5 rounded-xl transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
             Criar Novo Plano
@@ -238,7 +289,7 @@ export default function Planos({ onClose }: Props) {
               <div className="space-y-2">
                 {ativos.map(p => (
                   <div key={p.id} className="bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-2 gap-3">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-mono ${nivelColor(p.preco)}`}>{p.nome}</span>
                         <span className="text-[#52525b] text-xs">{p.duracao}</span>
@@ -251,6 +302,10 @@ export default function Planos({ onClose }: Props) {
                     <div className="flex flex-wrap gap-1">
                       {p.beneficios.slice(0, 3).map(b => <span key={b} className="text-[10px] text-[#52525b]">· {b}</span>)}
                       {p.beneficios.length > 3 && <span className="text-[10px] text-[#3f3f46]">+{p.beneficios.length - 3} mais</span>}
+                    </div>
+                    <div className="flex gap-2 mt-3 pt-3 border-t border-[#1a1a1a]">
+                      <button onClick={() => abrirEdicao(p.id)} className="text-xs text-blue-400 hover:text-blue-300">Editar</button>
+                      <button onClick={() => updatePlano(p.id, { ativo: false })} className="text-xs text-[#71717a] hover:text-white">Desativar</button>
                     </div>
                   </div>
                 ))}
@@ -270,10 +325,14 @@ export default function Planos({ onClose }: Props) {
             ) : (
               <div className="space-y-2">
                 {inativos.map(p => (
-                  <div key={p.id} className="bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl p-3 opacity-60">
+                  <div key={p.id} className="bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl p-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[#a1a1aa] text-sm">{p.nome}</span>
-                      <p className="text-[#71717a] font-mono text-sm">R$ {p.preco.toFixed(2).replace('.', ',')}</p>
+                      <div className="flex items-center gap-3">
+                        <p className="text-[#71717a] font-mono text-sm">R$ {p.preco.toFixed(2).replace('.', ',')}</p>
+                        <button onClick={() => abrirEdicao(p.id)} className="text-xs text-blue-400 hover:text-blue-300">Editar</button>
+                        <button onClick={() => updatePlano(p.id, { ativo: true })} className="text-xs text-[#22c55e] hover:text-[#16a34a]">Ativar</button>
+                      </div>
                     </div>
                   </div>
                 ))}

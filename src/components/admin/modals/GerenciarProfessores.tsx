@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { useDataStore } from '../../../store/dataStore'
+import TemporaryAccessModal from './TemporaryAccessModal'
+import { formatCpf, isValidCpf } from '../../../lib/cpf'
+import { formatLocalDate, toLocalDate } from '../../../lib/date'
 
 interface Props { onClose: () => void }
 
@@ -9,6 +12,8 @@ const ESPECIALIDADES = ['Musculação', 'Funcional', 'Crossfit', 'Personal', 'Pi
 
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const MINUTOS = ['00', '15', '30', '45']
+
+// ── Seleção e formatação de horário ───────────────────────────────────
 
 function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [h, m] = value ? value.split(':') : ['', '']
@@ -43,12 +48,17 @@ function formatSalario(v: string) {
 }
 
 export default function GerenciarProfessores({ onClose }: Props) {
+  // ── Dados, filtros e modais ──────────────────────────────────────────
+
   const { professores, addProfessor, updateProfessor } = useDataStore()
   const [filter, setFilter] = useState<FilterType>('todos')
   const [search, setSearch] = useState('')
   const [showCadastrar, setShowCadastrar] = useState(false)
   const [showEditar, setShowEditar] = useState(false)
+  const [showFerias, setShowFerias] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+
+  // ── Campos do professor ────────────────────────────────────────────────
 
   const [nome, setNome] = useState('')
   const [cpf, setCpf] = useState('')
@@ -59,13 +69,20 @@ export default function GerenciarProfessores({ onClose }: Props) {
   const [salario, setSalario] = useState('')
   const [especialidade, setEspecialidade] = useState('')
   const [especialidadeSecundaria, setEspecialidadeSecundaria] = useState('')
+  const [feriasInicio, setFeriasInicio] = useState(toLocalDate())
+  const [feriasFim, setFeriasFim] = useState('')
+  const [savingFerias, setSavingFerias] = useState(false)
   const [formError, setFormError] = useState('')
+  const [credencialCriada, setCredencialCriada] = useState<{ nome: string; cpf: string; senha: string } | null>(null)
 
   const horario = horarioInicio && horarioFim ? `${horarioInicio} - ${horarioFim}` : ''
 
   const filtered = professores.filter(p => {
     const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || p.cpf.includes(search)
-    const matchFilter = filter === 'todos' ? true : p.status === filter
+    const matchFilter = filter === 'todos'
+      || (filter === 'ativos' && p.status === 'ativo')
+      || (filter === 'ferias' && p.status === 'ferias')
+      || (filter === 'inativos' && p.status === 'inativo')
     return matchSearch && matchFilter
   })
 
@@ -73,12 +90,7 @@ export default function GerenciarProfessores({ onClose }: Props) {
   const ferias = professores.filter(p => p.status === 'ferias').length
   const folhaPendente = professores.filter(p => p.status === 'ativo').reduce((acc, p) => acc + p.salario, 0)
 
-  const formatCpf = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11)
-    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-      .replace(/(\d{3})(\d{3})(\d{3})/, '$1.$2.$3')
-      .replace(/(\d{3})(\d{3})/, '$1.$2')
-  }
+  // ── Formatação e preparação do formulário ───────────────────────────────
 
   const formatTel = (v: string) => {
     const d = v.replace(/\D/g, '').slice(0, 11)
@@ -96,7 +108,7 @@ export default function GerenciarProfessores({ onClose }: Props) {
   const openEdit = (p: any) => {
     setEditingId(p.id)
     setNome(p.nome || '')
-    setCpf(p.cpf || '')
+    setCpf(formatCpf(p.cpf || ''))
     setTelefone(p.telefone || '')
     setEmail(p.email || '')
     const [start, end] = (p.horario || '').split(' - ')
@@ -107,16 +119,20 @@ export default function GerenciarProfessores({ onClose }: Props) {
     const espParts = (p.especialidade || '').split(' / ')
     setEspecialidade(espParts[0] || '')
     setEspecialidadeSecundaria(espParts[1] || '')
+    setFeriasInicio(p.feriasInicio || toLocalDate())
+    setFeriasFim(p.feriasFim || '')
     setFormError('')
     setShowEditar(true)
   }
+
+  // ── Cadastro, edição e status ───────────────────────────────────────
 
 const handleCadastrar = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
     
     if (!nome.trim()) { setFormError('Preencha o nome.'); return }
-    if (cpf.replace(/\D/g, '').length < 11) { setFormError('CPF inválido.'); return }
+    if (!isValidCpf(cpf)) { setFormError('Informe um CPF válido. Verifique os números digitados.'); return }
     if (telefone.replace(/\D/g, '').length < 10) { setFormError('Telefone inválido.'); return }
     if (!email.includes('@')) { setFormError('E-mail inválido.'); return }
     if (!horarioInicio || !horarioFim) { setFormError('Selecione o horário de início e fim.'); return }
@@ -129,7 +145,7 @@ const handleCadastrar = async (e: React.FormEvent) => {
 
     try {
       // O 'await' obriga o front-end a esperar o Supabase responder
-      await addProfessor({
+      const result = await addProfessor({
         nome: nome.trim(),
         cpf,
         telefone,
@@ -139,6 +155,7 @@ const handleCadastrar = async (e: React.FormEvent) => {
         especialidade: espStr,
         status: 'ativo',
       })
+      setCredencialCriada({ nome: result.record.nome, cpf: result.record.cpf, senha: result.temporaryPassword })
       
       // Só fecha o modal se a gravação no banco for um sucesso absoluto
       setShowCadastrar(false)
@@ -153,7 +170,7 @@ const handleCadastrar = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingId) return
     if (!nome.trim()) { setFormError('Preencha o nome.'); return }
-    if (cpf.replace(/\D/g, '').length < 11) { setFormError('CPF inválido.'); return }
+    if (!isValidCpf(cpf)) { setFormError('Informe um CPF válido. Verifique os números digitados.'); return }
     if (telefone.replace(/\D/g, '').length < 10) { setFormError('Telefone inválido.'); return }
     if (!email.includes('@')) { setFormError('E-mail inválido.'); return }
     if (!horarioInicio || !horarioFim) { setFormError('Selecione o horário de início e fim.'); return }
@@ -184,17 +201,50 @@ const handleCadastrar = async (e: React.FormEvent) => {
     }
   }
 
-  const handleMudarStatus = async (status: 'ferias' | 'inativo') => {
+  const handleMudarStatus = async (status: 'ativo' | 'inativo') => {
     if (!editingId) return
-    const confirmed = window.confirm(status === 'inativo' ? 'Tem certeza que deseja demitir este professor?' : 'Colocar o professor em férias?')
+    const confirmed = window.confirm(status === 'inativo' ? 'Tem certeza que deseja demitir este professor?' : 'Confirmar o retorno deste professor ao trabalho?')
     if (!confirmed) return
     try {
-      await updateProfessor(editingId, { status })
+      await updateProfessor(editingId, {
+        status,
+        ...(status === 'ativo' ? { feriasInicio: '', feriasFim: '' } : {}),
+      })
       setShowEditar(false)
       setEditingId(null)
       resetForm()
     } catch (err: any) {
       setFormError(err?.message || 'Erro ao atualizar status.')
+    }
+  }
+
+  const handleSalvarFerias = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingId) return
+    setFormError('')
+    if (!feriasInicio || !feriasFim) {
+      setFormError('Selecione o primeiro e o último dia das férias.')
+      return
+    }
+    if (feriasFim < feriasInicio) {
+      setFormError('A data final não pode ser anterior à data inicial.')
+      return
+    }
+    setSavingFerias(true)
+    try {
+      await updateProfessor(editingId, {
+        status: 'ferias',
+        feriasInicio,
+        feriasFim,
+      })
+      setShowFerias(false)
+      setShowEditar(false)
+      setEditingId(null)
+      resetForm()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Não foi possível salvar o período de férias.')
+    } finally {
+      setSavingFerias(false)
     }
   }
 
@@ -212,6 +262,70 @@ const handleCadastrar = async (e: React.FormEvent) => {
   ]
 
   const espSecOptions = ESPECIALIDADES.filter(e => e !== especialidade)
+
+  const editingProfessor = professores.find(professor => professor.id === editingId)
+
+  if (showFerias && editingProfessor) {
+    return (
+      <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="bg-[#111111] border border-[#2a2a2a] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+          <div className="flex items-start justify-between p-5 border-b border-[#1f1f1f]">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-yellow-500/10 text-yellow-400 flex items-center justify-center">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 21h18M5 21c1.5-5 4-8.5 7-11 3 2.5 5.5 6 7 11M12 10V3M9 6l3-3 3 3" /></svg>
+              </div>
+              <div>
+                <h2 className="font-bold text-white font-mono">Definir período de férias</h2>
+                <p className="text-[#71717a] text-xs mt-0.5">{editingProfessor.nome}</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => { setShowFerias(false); setFormError('') }} className="text-[#52525b] hover:text-white">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+
+          <form onSubmit={handleSalvarFerias} className="p-5 space-y-5">
+            <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4">
+              <p className="text-yellow-200 text-sm font-semibold">Período completo de afastamento</p>
+              <p className="text-[#a1a1aa] text-xs mt-1">Selecione o primeiro dia fora da escala e o último dia das férias.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[#a1a1aa] text-xs mb-1.5">Início das férias</label>
+                <input type="date" value={feriasInicio} onChange={e => { setFeriasInicio(e.target.value); if (feriasFim && e.target.value > feriasFim) setFeriasFim('') }}
+                  className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-yellow-500" />
+              </div>
+              <div>
+                <label className="block text-[#a1a1aa] text-xs mb-1.5">Último dia de férias</label>
+                <input type="date" min={feriasInicio || undefined} value={feriasFim} onChange={e => setFeriasFim(e.target.value)}
+                  className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-yellow-500" />
+              </div>
+            </div>
+
+            {feriasInicio && feriasFim && (
+              <div className="flex items-center justify-center gap-3 bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl px-4 py-4">
+                <span className="text-white font-mono font-semibold">{formatLocalDate(feriasInicio)}</span>
+                <span className="text-yellow-400">→</span>
+                <span className="text-white font-mono font-semibold">{formatLocalDate(feriasFim)}</span>
+              </div>
+            )}
+
+            {formError && <p className="text-red-300 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{formError}</p>}
+
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setShowFerias(false); setFormError('') }} className="flex-1 bg-[#1a1a1a] hover:bg-[#222] text-white rounded-xl py-2.5 text-sm">Cancelar</button>
+              <button type="submit" disabled={savingFerias} className="flex-1 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-60 text-black font-semibold rounded-xl py-2.5 text-sm">
+                {savingFerias ? 'Salvando...' : 'Confirmar férias'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Formulário de edição ────────────────────────────────────────────
 
   if (showEditar) {
     return (
@@ -236,8 +350,9 @@ const handleCadastrar = async (e: React.FormEvent) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[#a1a1aa] text-xs mb-1">CPF</label>
-                <input value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="123.456.789-00"
-                  className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e]" />
+                <input value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="123.456.789-00" inputMode="numeric" aria-invalid={cpf.length === 14 && !isValidCpf(cpf)}
+                  className={`w-full bg-[#1a1a1a] border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none ${cpf.length === 14 && !isValidCpf(cpf) ? 'border-red-500 focus:border-red-400' : 'border-[#2a2a2a] focus:border-[#22c55e]'}`} />
+                {cpf.length === 14 && !isValidCpf(cpf) && <p className="text-red-400 text-[11px] mt-1">CPF inválido</p>}
               </div>
               <div>
                 <label className="block text-[#a1a1aa] text-xs mb-1">Telefone</label>
@@ -312,6 +427,13 @@ const handleCadastrar = async (e: React.FormEvent) => {
               )}
             </div>
 
+            {editingProfessor?.status === 'ferias' && editingProfessor.feriasInicio && editingProfessor.feriasFim && (
+              <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-3">
+                <p className="text-yellow-300 text-xs font-semibold">Férias atuais</p>
+                <p className="text-white text-sm font-mono mt-1">{formatLocalDate(editingProfessor.feriasInicio)} → {formatLocalDate(editingProfessor.feriasFim)}</p>
+              </div>
+            )}
+
             {formError && (
               <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{formError}</p>
             )}
@@ -324,7 +446,12 @@ const handleCadastrar = async (e: React.FormEvent) => {
             </div>
 
             <div className="flex gap-2">
-              <button type="button" onClick={() => handleMudarStatus('ferias')} className="flex-1 bg-yellow-500/10 text-yellow-400 rounded-xl py-2 text-sm">Colocar em Férias</button>
+              <button type="button" onClick={() => { setFormError(''); setShowFerias(true) }} className="flex-1 bg-yellow-500/10 hover:bg-yellow-500/15 text-yellow-400 rounded-xl py-2 text-sm">
+                {editingProfessor?.status === 'ferias' ? 'Alterar Férias' : 'Programar Férias'}
+              </button>
+              {editingProfessor?.status === 'ferias' && (
+                <button type="button" onClick={() => handleMudarStatus('ativo')} className="flex-1 bg-[#22c55e]/10 hover:bg-[#22c55e]/15 text-[#22c55e] rounded-xl py-2 text-sm">Retornar</button>
+              )}
               <button type="button" onClick={() => handleMudarStatus('inativo')} className="flex-1 bg-red-500/10 text-red-400 rounded-xl py-2 text-sm">Demitir</button>
             </div>
           </form>
@@ -333,6 +460,8 @@ const handleCadastrar = async (e: React.FormEvent) => {
     )
   }
 
+  // ── Formulário de cadastro ────────────────────────────────────────────
+
   if (showCadastrar) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -340,7 +469,7 @@ const handleCadastrar = async (e: React.FormEvent) => {
           <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
             <div>
               <h2 className="font-bold text-white font-mono">Cadastrar Professor</h2>
-              <p className="text-[#71717a] text-xs mt-0.5">Todos os campos são obrigatórios</p>
+              <p className="text-[#71717a] text-xs mt-0.5">Será gerada uma senha temporária exclusiva para o primeiro acesso.</p>
             </div>
             <button onClick={() => { setShowCadastrar(false); resetForm() }} className="text-[#52525b] hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -358,8 +487,9 @@ const handleCadastrar = async (e: React.FormEvent) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[#a1a1aa] text-xs mb-1">CPF</label>
-                <input value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="123.456.789-00"
-                  className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e]" />
+                <input value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="123.456.789-00" inputMode="numeric" aria-invalid={cpf.length === 14 && !isValidCpf(cpf)}
+                  className={`w-full bg-[#1a1a1a] border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none ${cpf.length === 14 && !isValidCpf(cpf) ? 'border-red-500 focus:border-red-400' : 'border-[#2a2a2a] focus:border-[#22c55e]'}`} />
+                {cpf.length === 14 && !isValidCpf(cpf) && <p className="text-red-400 text-[11px] mt-1">CPF inválido</p>}
               </div>
               <div>
                 <label className="block text-[#a1a1aa] text-xs mb-1">Telefone</label>
@@ -456,7 +586,10 @@ const handleCadastrar = async (e: React.FormEvent) => {
     )
   }
 
+  // ── Lista de professores ─────────────────────────────────────────────
+
   return (
+    <>
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
@@ -534,6 +667,9 @@ const handleCadastrar = async (e: React.FormEvent) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium">{p.nome}</p>
                     <p className="text-[#52525b] text-xs">{p.especialidade} · {p.horario}</p>
+                    {p.status === 'ferias' && p.feriasInicio && p.feriasFim && (
+                      <p className="text-yellow-400/80 text-[11px] mt-0.5">{formatLocalDate(p.feriasInicio)} → {formatLocalDate(p.feriasFim)}</p>
+                    )}
                   </div>
                   <div className="hidden sm:block text-[#52525b] text-xs font-mono">R$ {p.salario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                   <div>{statusBadge(p.status)}</div>
@@ -555,5 +691,15 @@ const handleCadastrar = async (e: React.FormEvent) => {
         </div>
       </div>
     </div>
+    {credencialCriada && (
+      <TemporaryAccessModal
+        nome={credencialCriada.nome}
+        cpf={credencialCriada.cpf}
+        perfil="Professor"
+        senha={credencialCriada.senha}
+        onClose={() => setCredencialCriada(null)}
+      />
+    )}
+    </>
   )
 }

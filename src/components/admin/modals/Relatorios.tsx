@@ -3,6 +3,8 @@ import { useDataStore } from '../../../store/dataStore'
 interface Props { onClose: () => void }
 
 export default function Relatorios({ onClose }: Props) {
+  // ── Indicadores operacionais e financeiros ─────────────────────────────────
+
   const { alunos, turmas, planos, transacoes, professores } = useDataStore()
   const adimplentes = alunos.filter(a => a.pagamentoStatus === 'pago').length
   const totalAtivos = alunos.filter(a => a.status === 'ativo').length
@@ -56,6 +58,8 @@ export default function Relatorios({ onClose }: Props) {
 
   const receitas = transacoes.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0)
   const despesas = transacoes.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0)
+
+  // ── Interface do relatório ─────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">

@@ -1,20 +1,29 @@
 import { useState } from 'react'
 import { useDataStore } from '../../../store/dataStore'
+import { formatLocalDate, toLocalDate } from '../../../lib/date'
 
 interface Props { onClose: () => void }
 
 type ModalType = 'receita' | 'despesa' | null
 
+// ── Categorias financeiras ────────────────────────────────────────────
+
 const CATEGORIAS_RECEITA = ['Mensalidade', 'Matrícula', 'Personal Training', 'Loja / Suplementos', 'Outros']
 const CATEGORIAS_DESPESA = ['Aluguel', 'Energia', 'Água', 'Internet', 'Folha de Pagamento', 'Manutenção', 'Limpeza', 'Marketing', 'Equipamentos', 'Outros']
 
 export default function Financeiro({ onClose }: Props) {
-  const { transacoes, professores, addTransacao } = useDataStore()
+  // ── Dados e estado do lançamento ────────────────────────────────────────
+
+  const { transacoes, professores, alunos, planos, addTransacao } = useDataStore()
   const [subModal, setSubModal] = useState<ModalType>(null)
   const [categoria, setCategoria] = useState('')
   const [descricao, setDescricao] = useState('')
   const [valor, setValor] = useState('')
-  const [data, setData] = useState(new Date().toISOString().split('T')[0])
+  const [data, setData] = useState(toLocalDate())
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  // ── Totais e indicadores ─────────────────────────────────────────────
 
   const receitas = transacoes.filter(t => t.tipo === 'receita')
   const despesas = transacoes.filter(t => t.tipo === 'despesa')
@@ -27,6 +36,13 @@ export default function Financeiro({ onClose }: Props) {
   const pagos = receitas.filter(t => t.status === 'pago').length
   const pendentes = receitas.filter(t => t.status === 'pendente').length
   const atrasados = receitas.filter(t => t.status === 'atrasado').length
+  const previstoMensalidades = alunos
+    .filter(aluno => aluno.status === 'ativo')
+    .reduce((total, aluno) => total + (planos.find(plano => plano.id === aluno.planoId)?.preco ?? 0), 0)
+  const recebidoMensalidades = receitas
+    .filter(transacao => transacao.categoria === 'Mensalidade' && transacao.status === 'pago')
+    .reduce((total, transacao) => total + transacao.valor, 0)
+  const percentualRecebido = previstoMensalidades > 0 ? Math.min(100, (recebidoMensalidades / previstoMensalidades) * 100) : 0
 
   const fmt = (v: number) => `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
 
@@ -39,21 +55,36 @@ export default function Financeiro({ onClose }: Props) {
 
   const valorNumerico = parseFloat(valor.replace(/\./g, '').replace(',', '.')) || 0
 
-  const handleAdd = (e: React.FormEvent) => {
+  // ── Inclusão de receita ou despesa ──────────────────────────────────────
+
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!categoria || !valor || valorNumerico <= 0) return
-    addTransacao({
-      tipo: subModal as 'receita' | 'despesa',
-      categoria,
-      descricao,
-      valor: valorNumerico,
-      data,
-      status: subModal === 'receita' ? 'pago' : undefined,
-    })
-    setSubModal(null); setCategoria(''); setDescricao(''); setValor(''); setData(new Date().toISOString().split('T')[0])
+    setFormError('')
+    if (!categoria || !valor || valorNumerico <= 0) {
+      setFormError('Informe a categoria e um valor válido.')
+      return
+    }
+    setSaving(true)
+    try {
+      await addTransacao({
+        tipo: subModal as 'receita' | 'despesa',
+        categoria,
+        descricao,
+        valor: valorNumerico,
+        data,
+        status: subModal === 'receita' ? 'pago' : undefined,
+      })
+      setSubModal(null); setCategoria(''); setDescricao(''); setValor(''); setData(toLocalDate())
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Não foi possível salvar o lançamento.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const categorias = subModal === 'receita' ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA
+
+  // ── Modal de novo lançamento ─────────────────────────────────────────
 
   if (subModal) {
     return (
@@ -103,16 +134,19 @@ export default function Financeiro({ onClose }: Props) {
             <div className="flex gap-2 pt-1">
               <button type="button" onClick={() => setSubModal(null)}
                 className="flex-1 bg-[#1a1a1a] hover:bg-[#222] text-white rounded-xl py-2.5 text-sm transition-colors">Cancelar</button>
-              <button type="submit"
-                className={`flex-1 ${subModal === 'receita' ? 'bg-[#22c55e] hover:bg-[#16a34a]' : 'bg-red-500 hover:bg-red-600'} text-${subModal === 'receita' ? 'black' : 'white'} font-semibold rounded-xl py-2.5 text-sm transition-colors`}>
-                Salvar
+              <button type="submit" disabled={saving}
+                className={`flex-1 ${subModal === 'receita' ? 'bg-[#22c55e] hover:bg-[#16a34a] text-black' : 'bg-red-500 hover:bg-red-600 text-white'} disabled:opacity-60 font-semibold rounded-xl py-2.5 text-sm transition-colors`}>
+                {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
+            {formError && <p className="text-red-300 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{formError}</p>}
           </form>
         </div>
       </div>
     )
   }
+
+  // ── Visão geral financeira ──────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -181,7 +215,7 @@ export default function Financeiro({ onClose }: Props) {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-white font-semibold text-sm">Recebimentos Recentes</p>
-                <p className="text-[#52525b] text-xs">Confirmações automáticas recebidas por webhook do provedor</p>
+                <p className="text-[#52525b] text-xs">Lançamentos registrados pela administração; ainda não há confirmação automática por provedor.</p>
               </div>
               <div className="flex gap-2">
                 <span className="text-xs bg-[#22c55e]/15 text-[#22c55e] px-2 py-1 rounded-full">Pago: {pagos}</span>
@@ -201,19 +235,19 @@ export default function Financeiro({ onClose }: Props) {
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-[#71717a]">Previsto</span>
-                    <span className="text-[#a1a1aa] font-mono">{fmt(totalReceitas + 89.9)}</span>
+                    <span className="text-[#a1a1aa] font-mono">{fmt(previstoMensalidades)}</span>
                   </div>
                   <div className="w-full bg-[#2a2a2a] rounded-full h-1.5">
-                    <div className="bg-blue-400 h-1.5 rounded-full" style={{ width: '75%' }} />
+                    <div className="bg-blue-400 h-1.5 rounded-full" style={{ width: previstoMensalidades > 0 ? '100%' : '0%' }} />
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-[#71717a]">Realizado</span>
-                    <span className="text-[#22c55e] font-mono">{fmt(totalReceitas)}</span>
+                    <span className="text-[#22c55e] font-mono">{fmt(recebidoMensalidades)}</span>
                   </div>
                   <div className="w-full bg-[#2a2a2a] rounded-full h-1.5">
-                    <div className="bg-[#22c55e] h-1.5 rounded-full" style={{ width: `${Math.min(100, (totalReceitas / (totalReceitas + 89.9)) * 100)}%` }} />
+                    <div className="bg-[#22c55e] h-1.5 rounded-full" style={{ width: `${percentualRecebido}%` }} />
                   </div>
                 </div>
               </div>
@@ -225,7 +259,7 @@ export default function Financeiro({ onClose }: Props) {
                   <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e] flex-shrink-0" />
                   <p className="flex-1 text-white text-xs truncate">{t.descricao || t.categoria}</p>
                   <p className="text-[#22c55e] text-xs font-mono">{fmt(t.valor)}</p>
-                  <p className="text-[#52525b] text-xs">{new Date(t.data).toLocaleDateString('pt-BR')}</p>
+                  <p className="text-[#52525b] text-xs">{formatLocalDate(t.data)}</p>
                 </div>
               ))}
               {despesas.slice(-3).reverse().map(t => (
@@ -233,7 +267,7 @@ export default function Financeiro({ onClose }: Props) {
                   <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
                   <p className="flex-1 text-white text-xs truncate">{t.descricao || t.categoria}</p>
                   <p className="text-red-400 text-xs font-mono">-{fmt(t.valor)}</p>
-                  <p className="text-[#52525b] text-xs">{new Date(t.data).toLocaleDateString('pt-BR')}</p>
+                  <p className="text-[#52525b] text-xs">{formatLocalDate(t.data)}</p>
                 </div>
               ))}
             </div>

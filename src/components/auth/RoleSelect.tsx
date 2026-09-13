@@ -4,11 +4,27 @@ import type { UserRole } from '../../types'
 export default function RoleSelect() {
   const navigate = useNavigate()
 
+  // ── Perfis disponíveis ────────────────────────────────────────────────
+
   const roles = [
+    {
+      role: 'owner' as UserRole,
+      label: 'Proprietário',
+      desc: 'Cadastre academias e defina quem administra cada unidade.',
+      icon: (
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" />
+          <path d="M9 10h.01M15 10h.01" />
+        </svg>
+      ),
+      iconBg: 'bg-violet-400/10',
+      iconColor: 'text-violet-300',
+      border: 'hover:border-violet-400/40',
+    },
     {
       role: 'admin' as UserRole,
       label: 'Administração',
-      desc: 'Gerencie alunos, professores, financeiro e relatórios.',
+      desc: 'Cuide de alunos, professores, financeiro e rotina da academia.',
       icon: (
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -48,6 +64,8 @@ export default function RoleSelect() {
     },
   ]
 
+  // ── Seleção do tipo de acesso ────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
       <div className="flex flex-col items-center mb-12">
@@ -62,7 +80,7 @@ export default function RoleSelect() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-6xl">
         {roles.map(({ role, label, desc, icon, iconBg, iconColor, border }) => (
           <button
             key={role}

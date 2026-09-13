@@ -4,8 +4,10 @@ import { useAuthStore } from '../../store/authStore'
 import { confirmFirstLogin } from '../../api/auth'
 
 export default function FirstLoginReset() {
+  // ── Sessão e campos da nova senha ──────────────────────────────────────
+
   const navigate = useNavigate()
-  const { role, currentAlunoId, currentProfessorId, setPendingFirstLogin } = useAuthStore()
+  const { role, currentAlunoId, currentProfessorId, currentAdminId, setPendingFirstLogin } = useAuthStore()
 
   const [nova, setNova] = useState('')
   const [confirma, setConfirma] = useState('')
@@ -13,12 +15,14 @@ export default function FirstLoginReset() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // ── Validação e confirmação do primeiro acesso ──────────────────────────────
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     if (nova.length < 6) { setError('A senha deve ter pelo menos 6 caracteres.'); return }
     if (nova !== confirma) { setError('As senhas não coincidem.'); return }
-    const entityId = role === 'professor' ? currentProfessorId : currentAlunoId
+    const entityId = role === 'owner' || role === 'admin' ? currentAdminId : role === 'professor' ? currentProfessorId : currentAlunoId
     if (!entityId || !role) return
     
     setLoading(true)
@@ -26,7 +30,7 @@ export default function FirstLoginReset() {
       await confirmFirstLogin(role, entityId, nova)
       setPendingFirstLogin(false)
       // Redireciona para o painel correto
-      navigate(role === 'professor' ? '/professor/dashboard' : '/aluno/dashboard')
+      navigate(role === 'owner' ? '/owner/dashboard' : role === 'admin' ? '/admin/dashboard' : role === 'professor' ? '/professor/dashboard' : '/aluno/dashboard')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao salvar senha.')
     } finally {
@@ -34,7 +38,7 @@ export default function FirstLoginReset() {
     }
   }
 
-  const firstName = 'Aluno'
+  // ── Interface de redefinição ─────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
@@ -46,7 +50,7 @@ export default function FirstLoginReset() {
               <path d="M8 11V7a4 4 0 0 1 8 0v4" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white font-mono mb-1">Bem-vindo, {role === 'professor' ? 'Professor' : 'Aluno'}!</h1>
+          <h1 className="text-2xl font-bold text-white font-mono mb-1">Bem-vindo, {role === 'owner' ? 'Proprietário' : role === 'admin' ? 'Administrador' : role === 'professor' ? 'Professor' : 'Aluno'}!</h1>
           <p className="text-[#71717a] text-sm text-center leading-relaxed">
             Este é seu primeiro acesso. Por segurança, crie uma nova senha pessoal para continuar.
           </p>

@@ -1,10 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import 'tailwindcss';
 
+/* ── Fontes do projeto ──────────────────────────────────────────────── */
+
 @theme inline {
   --font-sans: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
+
+/* ── Base global ───────────────────────────────────────────────────── */
 
 * {
   box-sizing: border-box;
@@ -22,6 +26,8 @@ body {
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* ── Barra de rolagem ────────────────────────────────────────────── */
 
 ::-webkit-scrollbar {
   width: 4px;
@@ -41,7 +47,33 @@ body {
   background: #3a3a3a;
 }
 
+/* ── Normalização de campos numéricos ─────────────────────────────────── */
+
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
+}
+
+/* ── Campos dos formulários administrativos ─────────────────────────── */
+
+.field-dark {
+  display: block;
+  width: 100%;
+  margin-top: 0.375rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 0.75rem;
+  background: #191919;
+  padding: 0.75rem 1rem;
+  color: #fff;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 150ms ease;
+}
+
+.field-dark:focus {
+  border-color: #a78bfa;
+}
+
+.field-dark::placeholder {
+  color: #52525b;
 }

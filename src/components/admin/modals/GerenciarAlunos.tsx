@@ -1,18 +1,24 @@
 import { useState } from 'react'
-import type { Aluno, Plano } from '../../../types'
+import type { Aluno, Plano, Turma } from '../../../types'
 import { useDataStore } from '../../../store/dataStore'
+import TemporaryAccessModal from './TemporaryAccessModal'
+import { formatLocalDate, toLocalDate } from '../../../lib/date'
+import { formatCpf, isValidCpf } from '../../../lib/cpf'
 
 interface Props { onClose: () => void }
 
 type FilterType = 'todos' | 'em_dia' | 'atrasados' | 'inativos'
 const PAGE_SIZE = 8
 
+// ── Perfil e edição de um aluno ──────────────────────────────────────
+
 function AlunoPerfilModal({
-  aluno, planos, professores, onClose, onSave,
+  aluno, planos, professores, turmas, onClose, onSave,
 }: {
   aluno: Aluno
   planos: Plano[]
   professores: any[] 
+  turmas: Turma[]
   onClose: () => void
   onSave: (data: Partial<Aluno>) => void
 }) {
@@ -24,12 +30,14 @@ function AlunoPerfilModal({
   const [peso, setPeso] = useState(String(aluno.peso || ''))
   const [planoId, setPlanoId] = useState(aluno.planoId)
   const [professorId, setProfessorId] = useState(aluno.professorId ?? '')
+  const [turmaId, setTurmaId] = useState(aluno.turmaId ?? '')
   const [status, setStatus] = useState(aluno.status)
   const [pagamentoStatus, setPagamentoStatus] = useState(aluno.pagamentoStatus)
   const [formaPagamento, setFormaPagamento] = useState(aluno.formaPagamento)
 
   const plano = planos.find(p => p.id === aluno.planoId)
   const professor = professores.find(p => p.id === professorId)
+  const turma = turmas.find(item => item.id === aluno.turmaId)
   const presencas = aluno.frequencia.filter(f => f.presente).length
   const totalFreq = aluno.frequencia.length
 
@@ -42,6 +50,7 @@ function AlunoPerfilModal({
       peso: parseFloat(peso) || 0, 
       planoId, 
       professorId, 
+      turmaId,
       status, 
       pagamentoStatus, 
       formaPagamento 
@@ -175,7 +184,7 @@ function AlunoPerfilModal({
                   { label: 'Email', value: aluno.email || '—' },
                   { label: 'Idade', value: aluno.idade ? `${aluno.idade} anos` : '—' },
                   { label: 'Peso', value: aluno.peso ? `${aluno.peso} kg` : '—' },
-                  { label: 'Matrícula', value: new Date(aluno.matriculaData).toLocaleDateString('pt-BR') },
+                  { label: 'Matrícula', value: formatLocalDate(aluno.matriculaData) },
                   { label: 'Forma Pgto.', value: aluno.formaPagamento || '—' },
                 ].map(f => (
                   <div key={f.label}>
@@ -205,7 +214,11 @@ function AlunoPerfilModal({
                   </div>
                   <div>
                     <label className="block text-[#71717a] text-xs mb-1">Professor Responsável</label>
-                    <select value={professorId} onChange={e => setProfessorId(e.target.value)}
+                    <select value={professorId} onChange={e => {
+                      const novoProfessorId = e.target.value
+                      setProfessorId(novoProfessorId)
+                      if (turmaId && turmas.find(item => item.id === turmaId)?.professorId !== novoProfessorId) setTurmaId('')
+                    }}
                       className="w-full bg-[#1a1a1a] border border-[#2a2a2a] focus:border-[#22c55e] rounded-xl px-3 py-2 text-white text-sm outline-none transition-colors">
                       <option value="">Sem professor</option>
                       {professores.map(p => (
@@ -233,6 +246,16 @@ function AlunoPerfilModal({
                       <option value="atrasado">Vencido</option>
                     </select>
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[#71717a] text-xs mb-1">Turma</label>
+                  <select value={turmaId} onChange={e => setTurmaId(e.target.value)}
+                    className="w-full bg-[#1a1a1a] border border-[#2a2a2a] focus:border-[#22c55e] rounded-xl px-3 py-2 text-white text-sm outline-none transition-colors">
+                    <option value="">Sem turma</option>
+                    {turmas.filter(item => !professorId || item.professorId === professorId).map(item => (
+                      <option key={item.id} value={item.id}>{item.nome} · {item.horario}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[#71717a] text-xs mb-1">Forma de pagamento</label>
@@ -266,8 +289,12 @@ function AlunoPerfilModal({
                   <p className="text-white mt-0.5">{aluno.formaPagamento || '—'}</p>
                 </div>
                 <div>
+                  <p className="text-[#52525b] text-xs">Turma</p>
+                  <p className="text-white mt-0.5">{turma?.nome ?? 'Sem turma definida'}</p>
+                </div>
+                <div>
                   <p className="text-[#52525b] text-xs">Vencimento</p>
-                  <p className="text-white mt-0.5">{aluno.vencimento ? new Date(aluno.vencimento).toLocaleDateString('pt-BR') : '—'}</p>
+                  <p className="text-white mt-0.5">{formatLocalDate(aluno.vencimento)}</p>
                 </div>
               </div>
             )}
@@ -281,7 +308,7 @@ function AlunoPerfilModal({
                 {aluno.historicoPeso.slice(-6).map((h, i) => (
                   <div key={i} className="flex-shrink-0 text-center">
                     <div className="text-[#52525b] text-[10px] mb-1">
-                      {new Date(h.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      {formatLocalDate(h.data).slice(0, 5)}
                     </div>
                     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2 min-w-[56px]">
                       <p className="text-white text-xs font-mono">{h.peso}kg</p>
@@ -319,12 +346,16 @@ function AlunoPerfilModal({
 }
 
 export default function GerenciarAlunos({ onClose }: Props) {
-  const { alunos, planos, professores, addAluno, updateAluno } = useDataStore()
+  // ── Dados, filtros e modais ──────────────────────────────────────────
+
+  const { alunos, planos, professores, turmas, addAluno, updateAluno } = useDataStore()
   const [filter, setFilter] = useState<FilterType>('todos')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [showCadastrar, setShowCadastrar] = useState(false)
   const [alunoSelecionado, setAlunoSelecionado] = useState<Aluno | null>(null)
+
+  // ── Campos do novo aluno ────────────────────────────────────────────────
 
   const [nome, setNome] = useState('')
   const [cpf, setCpf] = useState('')
@@ -334,7 +365,11 @@ export default function GerenciarAlunos({ onClose }: Props) {
   const [peso, setPeso] = useState('')
   const [planoId, setPlanoId] = useState('')
   const [professorId, setProfessorId] = useState('')
+  const [turmaId, setTurmaId] = useState('')
   const [formError, setFormError] = useState('')
+  const [credencialCriada, setCredencialCriada] = useState<{ nome: string; cpf: string; senha: string } | null>(null)
+
+  // ── Indicadores, busca e paginação ─────────────────────────────────────
 
   const ativos = alunos.filter(a => a.status === 'ativo').length
   const emAtraso = alunos.filter(a => a.pagamentoStatus === 'atrasado' || a.status === 'atrasado').length
@@ -353,10 +388,6 @@ export default function GerenciarAlunos({ onClose }: Props) {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  const formatCpf = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11)
-    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4').replace(/(\d{3})(\d{3})(\d{3})/, '$1.$2.$3').replace(/(\d{3})(\d{3})/, '$1.$2')
-  }
   const formatTel = (v: string) => {
     const d = v.replace(/\D/g, '').slice(0, 11)
     return d.length <= 10 ? d.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3') : d.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
@@ -368,17 +399,23 @@ export default function GerenciarAlunos({ onClose }: Props) {
     return parts.length > 2 ? parts[0] + ',' + parts[1] : clean
   }
 
+  // ── Cadastro e credencial de primeiro acesso ────────────────────────────────
+
   const handleCadastrar = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
     
-    if (!nome.trim() || cpf.replace(/\D/g, '').length < 11 || !planoId || !professorId) {
-      setFormError('Preencha todos os campos obrigatórios corretamente.')
+    if (!nome.trim() || !planoId || !professorId || !turmaId) {
+      setFormError('Preencha nome, plano, professor e turma.')
+      return
+    }
+    if (!isValidCpf(cpf)) {
+      setFormError('Informe um CPF válido. Verifique os números digitados.')
       return
     }
 
     try {
-      await addAluno({
+      const result = await addAluno({
         nome: nome.trim(),
         cpf,
         telefone,
@@ -387,11 +424,12 @@ export default function GerenciarAlunos({ onClose }: Props) {
         peso: parseFloat(peso.replace(',', '.')) || 0,
         planoId,
         professorId,
-        turmaId: undefined,
-        matriculaData: new Date().toISOString().split('T')[0],
+        turmaId,
+        matriculaData: toLocalDate(),
         status: 'ativo',
         formaPagamento: 'pix',
       })
+      setCredencialCriada({ nome: result.record.nome, cpf: result.record.cpf, senha: result.temporaryPassword })
       
       setShowCadastrar(false)
       setNome('')
@@ -402,11 +440,18 @@ export default function GerenciarAlunos({ onClose }: Props) {
       setPeso('')
       setPlanoId('')
       setProfessorId('')
+      setTurmaId('')
       setFormError('')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Erro ao cadastrar aluno.')
     }
   }
+
+  const turmasDisponiveis = turmas.filter(turma => (
+    turma.professorId === professorId
+    && turma.status !== 'cancelada'
+    && turma.alunoIds.length < turma.capacidade
+  ))
 
   const statusBadge = (a: Aluno) => {
     if (a.pagamentoStatus === 'atrasado' || a.status === 'atrasado')
@@ -423,20 +468,22 @@ export default function GerenciarAlunos({ onClose }: Props) {
     { key: 'inativos', label: 'Inativos', count: alunos.filter(a => a.status === 'inativo').length },
   ]
 
+  // ── Formulário de cadastro ────────────────────────────────────────────
+
   if (showCadastrar) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-md">
+        <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
           <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
             <div>
               <h2 className="font-bold text-white font-mono">Cadastrar Novo Aluno</h2>
-              <p className="text-[#71717a] text-xs mt-0.5">A senha inicial será <span className="font-mono text-[#a1a1aa]">123456</span> — aluno redefine no 1º acesso.</p>
+              <p className="text-[#71717a] text-xs mt-0.5">Uma senha temporária exclusiva será gerada e exibida após o cadastro.</p>
             </div>
             <button onClick={() => setShowCadastrar(false)} className="text-[#52525b] hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
-          <form onSubmit={handleCadastrar} className="p-5 space-y-4">
+          <form onSubmit={handleCadastrar} className="p-5 space-y-4 overflow-auto">
             <div>
               <label className="block text-[#a1a1aa] text-xs mb-1">Nome Completo</label>
               <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do aluno" autoFocus
@@ -445,8 +492,9 @@ export default function GerenciarAlunos({ onClose }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[#a1a1aa] text-xs mb-1">CPF</label>
-                <input value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="123.456.789-00"
-                  className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e] transition-colors" />
+                <input value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="123.456.789-00" inputMode="numeric" aria-invalid={cpf.length === 14 && !isValidCpf(cpf)}
+                  className={`w-full bg-[#1a1a1a] border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none transition-colors ${cpf.length === 14 && !isValidCpf(cpf) ? 'border-red-500 focus:border-red-400' : 'border-[#2a2a2a] focus:border-[#22c55e]'}`} />
+                {cpf.length === 14 && !isValidCpf(cpf) && <p className="text-red-400 text-[11px] mt-1">CPF inválido</p>}
               </div>
               <div>
                 <label className="block text-[#a1a1aa] text-xs mb-1">Telefone</label>
@@ -497,7 +545,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
               </div>
               <div>
                 <label className="block text-[#a1a1aa] text-xs mb-1">Professor Responsável</label>
-                <select value={professorId} onChange={e => setProfessorId(e.target.value)}
+                <select value={professorId} onChange={e => { setProfessorId(e.target.value); setTurmaId('') }}
                   className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e] transition-colors">
                   <option value="">Selecione o professor</option>
                   {professores.filter(p => p.status === 'ativo').map(p => (
@@ -508,6 +556,21 @@ export default function GerenciarAlunos({ onClose }: Props) {
                   <p className="text-[#52525b] text-xs mt-1">Nenhum professor ativo disponível.</p>
                 )}
               </div>
+            </div>
+            <div>
+              <label className="block text-[#a1a1aa] text-xs mb-1">Turma</label>
+              <select value={turmaId} onChange={e => setTurmaId(e.target.value)} disabled={!professorId}
+                className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <option value="">{professorId ? 'Selecione a turma' : 'Selecione o professor primeiro'}</option>
+                {turmasDisponiveis.map(turma => (
+                  <option key={turma.id} value={turma.id}>
+                    {turma.nome} · {turma.horario} · {turma.capacidade - turma.alunoIds.length} vaga(s)
+                  </option>
+                ))}
+              </select>
+              {professorId && turmasDisponiveis.length === 0 && (
+                <p className="text-yellow-400/80 text-xs mt-1">Esse professor não possui turma com vagas disponíveis.</p>
+              )}
             </div>
             {formError && (
               <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{formError}</p>
@@ -523,6 +586,8 @@ export default function GerenciarAlunos({ onClose }: Props) {
       </div>
     )
   }
+
+  // ── Lista de alunos ───────────────────────────────────────────────────────
 
   return (
     <>
@@ -650,11 +715,21 @@ export default function GerenciarAlunos({ onClose }: Props) {
           aluno={alunoSelecionado}
           planos={planos}
           professores={professores}
+          turmas={turmas}
           onClose={() => setAlunoSelecionado(null)}
           onSave={async data => {
             await updateAluno(alunoSelecionado.id, data)
             setAlunoSelecionado(prev => prev ? { ...prev, ...data } : null)
           }}
+        />
+      )}
+      {credencialCriada && (
+        <TemporaryAccessModal
+          nome={credencialCriada.nome}
+          cpf={credencialCriada.cpf}
+          perfil="Aluno"
+          senha={credencialCriada.senha}
+          onClose={() => setCredencialCriada(null)}
         />
       )}
     </>

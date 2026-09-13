@@ -1,8 +1,7 @@
-/**
- * Alunos API — localStorage-backed today; swap body for HTTP calls when a backend exists.
- */
 import { useDataStore } from '../store/dataStore'
 import type { Aluno } from '../types'
+
+// ── Fachada de acesso aos alunos ───────────────────────────────────────
 
 type CreatePayload = Omit<Aluno, 'id' | 'historicoPeso' | 'frequencia' | 'treinos' | 'sequencia' | 'metaSemanal' | 'conquistasDesbloqueadas' | 'pagamentoStatus' | 'isFirstLogin'>
 
@@ -11,18 +10,15 @@ export const alunosApi = {
     Promise.resolve(useDataStore.getState().alunos),
 
   create: (data: CreatePayload): Promise<Aluno> => {
-    const novo = useDataStore.getState().addAluno(data)
-    return Promise.resolve(novo)
+    return useDataStore.getState().addAluno(data).then(result => result.record)
   },
 
   update: (id: string, data: Partial<Aluno>): Promise<void> => {
-    useDataStore.getState().updateAluno(id, data)
-    return Promise.resolve()
+    return useDataStore.getState().updateAluno(id, data)
   },
 
   updatePeso: (alunoId: string, novoPeso: number): Promise<void> => {
-    useDataStore.getState().updatePeso(alunoId, novoPeso)
-    return Promise.resolve()
+    return useDataStore.getState().updatePeso(alunoId, novoPeso)
   },
 
   checkSerie: (
@@ -33,7 +29,6 @@ export const alunosApi = {
     cargaReal: number,
     reps: number
   ): Promise<void> => {
-    useDataStore.getState().checkSerie(alunoId, treinoId, exercicioId, serieNum, cargaReal, reps)
-    return Promise.resolve()
+    return useDataStore.getState().checkSerie(alunoId, treinoId, exercicioId, serieNum, cargaReal, reps)
   },
 }

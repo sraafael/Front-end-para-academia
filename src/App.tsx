@@ -5,6 +5,8 @@ import { useAuthStore } from './store/authStore'
 import { supabase } from './lib/supabase'
 import { projectId, publicAnonKey } from '../utils/supabase/info'
 
+// ── Configuração da inicialização ──────────────────────────────────────
+
 const SETUP_KEY = 'fitpro-setup-v3'
 const SETUP_URL = ``
 
@@ -13,15 +15,19 @@ export default function App() {
   const clearSession = useAuthStore((s) => s.clearSession)
 
   useEffect(() => {
-    // Restore session from Supabase on every page load
+    // ── Sincronização da sessão ────────────────────────────────────────────
+
+    // Restaura a sessão do Supabase ao abrir ou recarregar a aplicação.
     initialize()
 
-    // React to Supabase auth state changes (token expiry, sign-out from another tab)
+    // Reage a expiração de token e logout realizado em outra aba.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') clearSession()
     })
 
-  // Run DB setup once per browser (creates tables + seeds test users)
+    // ── Preparação inicial do banco ───────────────────────────────────────
+
+    // Executa o setup apenas uma vez por navegador.
     if (!localStorage.getItem(SETUP_KEY) && SETUP_URL.trim() !== '') {
       fetch(SETUP_URL, {
         method: 'POST',
@@ -48,6 +54,8 @@ export default function App() {
     
     return () => subscription.unsubscribe()
   }, [initialize, clearSession])
+
+  // ── Navegação principal ────────────────────────────────────────────────
 
   return <RouterProvider router={router} />
 }

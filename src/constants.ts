@@ -1,5 +1,7 @@
 import type { Conquista } from './types'
 
+// ── Catálogo de conquistas do aluno ─────────────────────────────────────
+
 export const CONQUISTAS_CATALOGO: Conquista[] = [
   { id: 'primeiro_treino', nome: 'Primeiro Passo',   descricao: 'Completou o primeiro treino',             icon: '🏋️', nivel: 'bronze',  criterio: '' },
   { id: 'seq_7',           nome: '7 Dias de Fogo',   descricao: '7 dias consecutivos na academia',         icon: '🔥', nivel: 'bronze',  criterio: '' },

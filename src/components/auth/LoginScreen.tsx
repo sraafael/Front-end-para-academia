@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useAuthStore } from '../../store/authStore'
+import { formatCpf, isValidCpf } from '../../lib/cpf'
 import { login } from '../../api/auth'
 import type { UserRole } from '../../types'
+
+// ── Aparência e orientação por perfil ────────────────────────────────────
 
 const ROLE_CONFIG: Record<UserRole, {
   label: string
@@ -11,9 +14,21 @@ const ROLE_CONFIG: Record<UserRole, {
   iconColor: string
   icon: React.ReactNode
 }> = {
+  owner: {
+    label: 'Proprietário',
+    hint: 'Acesso exclusivo para cadastrar academias e gerenciar administradores.',
+    iconBg: 'bg-violet-400/10',
+    iconColor: '#c4b5fd',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" />
+        <path d="M9 10h.01M15 10h.01" />
+      </svg>
+    ),
+  },
   admin: {
     label: 'Administração',
-    hint: '',
+    hint: 'Use o acesso temporário criado pelo proprietário da academia.',
     iconBg: 'bg-[#1a3a1a]',
     iconColor: '#22c55e',
     icon: (
@@ -24,7 +39,7 @@ const ROLE_CONFIG: Record<UserRole, {
   },
   professor: {
     label: 'Professor',
-    hint: '',
+    hint: 'No primeiro acesso, use a senha temporária fornecida pela administração.',
     iconBg: 'bg-[#1a2a3a]',
     iconColor: '#3b82f6',
     icon: (
@@ -35,7 +50,7 @@ const ROLE_CONFIG: Record<UserRole, {
   },
   aluno: {
     label: 'Aluno',
-    hint: 'No primeiro acesso, use a senha numérica de 6 dígitos gerada pela administração.',
+    hint: 'No primeiro acesso, use a senha temporária fornecida pela administração.',
     iconBg: 'bg-[#3a1a1a]',
     iconColor: '#ef4444',
     icon: (
@@ -47,8 +62,10 @@ const ROLE_CONFIG: Record<UserRole, {
 }
 
 export default function LoginScreen() {
+  // ── Perfil da rota e estado do formulário ──────────────────────────────────
+
   const params = useParams()
-  const VALID: UserRole[] = ['admin', 'professor', 'aluno']
+  const VALID: UserRole[] = ['owner', 'admin', 'professor', 'aluno']
   const role: UserRole = VALID.includes(params.role as UserRole) ? (params.role as UserRole) : 'admin'
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
@@ -62,27 +79,25 @@ export default function LoginScreen() {
 
   const config = ROLE_CONFIG[role] ?? ROLE_CONFIG.admin
 
-  const formatCpf = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11)
-    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-      .replace(/(\d{3})(\d{3})(\d{3})/, '$1.$2.$3')
-      .replace(/(\d{3})(\d{3})/, '$1.$2')
-  }
+  // ── Formatação e envio das credenciais ────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     if (!cpf || !senha) { setError('Preencha todos os campos.'); return }
+    if (!isValidCpf(cpf)) { setError('Informe um CPF válido.'); return }
     setLoading(true)
     const result = await login(role, cpf, senha)
     setLoading(false)
     if (!result.ok) { setError(result.error); return }
 
-    setAuth(result.role, result.userId)
+    setAuth(result.role, result.userId, result.isOwner, result.isPreview, result.displayName)
 
-    if (result.role === 'aluno' && result.isFirstLogin) {
+    if (result.isFirstLogin) {
       setPendingFirstLogin(true)
       navigate('/primeiro-acesso')
+    } else if (result.role === 'owner') {
+      navigate('/owner/dashboard')
     } else if (result.role === 'admin') {
       navigate('/admin/dashboard')
     } else if (result.role === 'professor') {
@@ -91,6 +106,8 @@ export default function LoginScreen() {
       navigate('/aluno/dashboard')
     }
   }
+
+  // ── Interface de login ────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col px-4 py-8">
@@ -155,15 +172,19 @@ export default function LoginScreen() {
             </div>
           </div>
 
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => navigate(`/recuperar-senha/${role}`)}
-              className="text-[#22c55e] text-sm hover:text-[#16a34a] transition-colors"
-            >
-              Esqueceu a senha?
-            </button>
-          </div>
+          {role === 'owner' ? (
+            <p className="text-right text-xs text-[#52525b]">A senha do proprietário é protegida pelo painel principal do sistema.</p>
+          ) : (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => navigate(`/recuperar-senha/${role}`)}
+                className="text-[#22c55e] text-sm hover:text-[#16a34a] transition-colors"
+              >
+                Esqueceu a senha?
+              </button>
+            </div>
+          )}
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
           {config.hint && <p className="text-[#52525b] text-xs leading-relaxed">{config.hint}</p>}

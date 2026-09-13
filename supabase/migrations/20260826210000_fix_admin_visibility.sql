@@ -1,7 +1,11 @@
--- Fix FitPro admin visibility without depending on a public.profiles table.
--- Safe to run more than once in the Supabase SQL Editor.
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Visibilidade administrativa de alunos e professores
+-- Pode ser executada mais de uma vez no SQL Editor do Supabase.
+-- ═══════════════════════════════════════════════════════════════════════════
 
 begin;
+
+-- ── Identificação segura do administrador ─────────────────────────────────
 
 create or replace function public.is_fitpro_admin()
 returns boolean
@@ -16,11 +20,12 @@ $$;
 revoke all on function public.is_fitpro_admin() from public;
 grant execute on function public.is_fitpro_admin() to authenticated;
 
+-- ── Ativação da segurança por linha ────────────────────────────────────
+
 alter table public.alunos enable row level security;
 alter table public.professores enable row level security;
 
--- Remove every old policy from these two tables. The deployed project had
--- several policies that silently filtered all rows for the administrator.
+-- Remove políticas antigas que filtravam silenciosamente os dados do admin.
 do $$
 declare
   policy_row record;
@@ -43,7 +48,8 @@ $$;
 grant select, insert, update, delete on table public.alunos to authenticated;
 grant select, insert, update, delete on table public.professores to authenticated;
 
--- Administrator: full management access.
+-- ── Administrador: acesso total ────────────────────────────────────────
+
 create policy "alunos: admin all"
 on public.alunos
 for all
@@ -58,7 +64,8 @@ to authenticated
 using (public.is_fitpro_admin())
 with check (public.is_fitpro_admin());
 
--- Professor: own profile and only students assigned to that profile.
+-- ── Professor: perfil próprio e alunos vinculados ──────────────────────────
+
 create policy "professores: own read"
 on public.professores
 for select
@@ -78,7 +85,8 @@ using (
   )
 );
 
--- Student: own profile only.
+-- ── Aluno: somente o próprio perfil ─────────────────────────────────────
+
 create policy "alunos: own read"
 on public.alunos
 for select

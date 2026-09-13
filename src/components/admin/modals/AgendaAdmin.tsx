@@ -1,17 +1,28 @@
 import { useState } from 'react'
 import type { Turma } from '../../../types'
 import { useDataStore } from '../../../store/dataStore'
+import { toLocalDate } from '../../../lib/date'
 
 interface Props { onClose: () => void }
+
+// ── Opções de cadastro ────────────────────────────────────────────────
 
 const MODALIDADES = ['Musculação', 'Funcional', 'Crossfit', 'Personal', 'Pilates', 'Natação', 'HIIT', 'Yoga', 'Hidroginástica']
 const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 export default function AgendaAdmin({ onClose }: Props) {
-  const { turmas, professores, alunos, addTurma } = useDataStore()
+  // ── Dados e estado dos modais ─────────────────────────────────────────
+
+  const { turmas, professores, alunos, addTurma, saveAttendance } = useDataStore()
   const [showNovaTurma, setShowNovaTurma] = useState(false)
   const [chamadaTurma, setChamadaTurma] = useState<Turma | null>(null)
   const [presencas, setPresencas] = useState<Record<string, boolean>>({})
+  const [salvandoChamada, setSalvandoChamada] = useState(false)
+  const [chamadaFeedback, setChamadaFeedback] = useState('')
+  const [formError, setFormError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  // ── Campos da nova turma ────────────────────────────────────────────────
 
   const [nome, setNome] = useState('')
   const [modalidade, setModalidade] = useState('')
@@ -23,12 +34,53 @@ export default function AgendaAdmin({ onClose }: Props) {
 
   const toggleDia = (d: string) => setDiasSelecionados(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
 
-  const handleCriar = (e: React.FormEvent) => {
+  // ── Cadastro da turma ──────────────────────────────────────────────────
+
+  const handleCriar = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!nome || !modalidade || !horario || !professorId) return
-    addTurma({ nome, modalidade, horario, diasSemana: diasSelecionados, capacidade: parseInt(capacidade) || 20, professorId, sala, alunoIds: [] })
-    setShowNovaTurma(false)
-    setNome(''); setModalidade(''); setHorario(''); setDiasSelecionados([]); setCapacidade(''); setProfessorId(''); setSala('')
+    setFormError('')
+    if (!nome || !modalidade || !horario || !professorId || diasSelecionados.length === 0) {
+      setFormError('Preencha nome, modalidade, horário, dias e professor.')
+      return
+    }
+    setSaving(true)
+    try {
+      await addTurma({ nome, modalidade, horario, diasSemana: diasSelecionados, capacidade: parseInt(capacidade) || 20, professorId, sala, alunoIds: [] })
+      setShowNovaTurma(false)
+      setNome(''); setModalidade(''); setHorario(''); setDiasSelecionados([]); setCapacidade(''); setProfessorId(''); setSala('')
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Não foi possível criar a turma.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const hoje = toLocalDate()
+
+  // ── Registro de presenças ──────────────────────────────────────────────
+
+  const abrirChamada = (turma: Turma) => {
+    const alunosDaTurma = alunos.filter(aluno => turma.alunoIds.includes(aluno.id))
+    setPresencas(Object.fromEntries(alunosDaTurma.map(aluno => [
+      aluno.id,
+      aluno.frequencia.find(item => item.data === hoje)?.presente ?? false,
+    ])))
+    setChamadaFeedback('')
+    setChamadaTurma(turma)
+  }
+
+  const salvarChamada = async () => {
+    if (!chamadaTurma) return
+    setSalvandoChamada(true)
+    setChamadaFeedback('')
+    try {
+      await saveAttendance(chamadaTurma.id, presencas, hoje)
+      setChamadaFeedback('Chamada salva no histórico dos alunos.')
+    } catch (err) {
+      setChamadaFeedback(err instanceof Error ? err.message : 'Não foi possível salvar a chamada.')
+    } finally {
+      setSalvandoChamada(false)
+    }
   }
 
   const statusConfig = {
@@ -39,6 +91,8 @@ export default function AgendaAdmin({ onClose }: Props) {
   }
 
   const sorted = [...turmas].sort((a, b) => a.horario.localeCompare(b.horario))
+
+  // ── Interface principal ────────────────────────────────────────────────
 
   if (chamadaTurma) {
     const alunosDaTurma = alunos.filter(a => chamadaTurma.alunoIds.includes(a.id))
@@ -92,10 +146,18 @@ export default function AgendaAdmin({ onClose }: Props) {
                 <p className="text-[#52525b] text-sm text-center py-6">Nenhum aluno matriculado nesta turma.</p>
               )}
             </div>
-            <button onClick={() => setChamadaTurma(null)}
-              className="w-full mt-4 text-[#52525b] text-sm hover:text-white transition-colors">
-              Fechar
-            </button>
+            {chamadaFeedback && (
+              <p className={`text-xs mt-4 px-3 py-2 rounded-xl border ${chamadaFeedback.startsWith('Chamada salva') ? 'text-[#22c55e] bg-[#22c55e]/10 border-[#22c55e]/20' : 'text-red-300 bg-red-500/10 border-red-500/20'}`}>
+                {chamadaFeedback}
+              </p>
+            )}
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setChamadaTurma(null)} className="flex-1 bg-[#1a1a1a] hover:bg-[#222] text-white text-sm rounded-xl py-2.5">Fechar</button>
+              <button onClick={salvarChamada} disabled={salvandoChamada || alunosDaTurma.length === 0}
+                className="flex-1 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-50 text-black font-semibold text-sm rounded-xl py-2.5">
+                {salvandoChamada ? 'Salvando...' : 'Salvar chamada'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -174,9 +236,10 @@ export default function AgendaAdmin({ onClose }: Props) {
             <div className="flex gap-2 pt-1">
               <button type="button" onClick={() => setShowNovaTurma(false)}
                 className="flex-1 bg-[#1a1a1a] hover:bg-[#222] text-white rounded-xl py-2.5 text-sm transition-colors">Cancelar</button>
-              <button type="submit"
-                className="flex-1 bg-[#22c55e] hover:bg-[#16a34a] text-black font-semibold rounded-xl py-2.5 text-sm transition-colors">Criar Turma</button>
+              <button type="submit" disabled={saving}
+                className="flex-1 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-60 text-black font-semibold rounded-xl py-2.5 text-sm transition-colors">{saving ? 'Salvando...' : 'Criar Turma'}</button>
             </div>
+            {formError && <p className="text-red-300 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{formError}</p>}
           </form>
         </div>
       </div>
@@ -217,7 +280,7 @@ export default function AgendaAdmin({ onClose }: Props) {
               return (
                 <button
                   key={t.id}
-                  onClick={() => setChamadaTurma(t)}
+                  onClick={() => abrirChamada(t)}
                   className="w-full flex items-center gap-4 bg-[#0f0f0f] border border-[#1f1f1f] hover:bg-[#161616] rounded-xl px-4 py-3.5 transition-colors text-left group"
                 >
                   <span className="text-[#71717a] font-mono text-sm w-12 flex-shrink-0">{t.horario}</span>

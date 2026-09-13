@@ -1,12 +1,16 @@
-export type UserRole = 'admin' | 'professor' | 'aluno'
+// ── Perfis de acesso e navegação ────────────────────────────────────────
+
+export type UserRole = 'owner' | 'admin' | 'professor' | 'aluno'
 
 export type View =
   | 'roleSelect'
+  | 'loginOwner'
   | 'loginAdmin'
   | 'loginProfessor'
   | 'loginAluno'
   | 'forgotPassword'
   | 'firstLoginReset'
+  | 'ownerDashboard'
   | 'adminDashboard'
   | 'professorDashboard'
   | 'alunoDashboard'
@@ -16,6 +20,8 @@ export type ProfessorStatus = 'ativo' | 'ferias' | 'inativo'
 export type TurmaStatus = 'concluida' | 'em_andamento' | 'proxima' | 'cancelada'
 export type TransacaoTipo = 'receita' | 'despesa'
 export type PagamentoStatus = 'pago' | 'pendente' | 'atrasado'
+
+// ── Fichas de treino ─────────────────────────────────────────────────────
 
 export interface SerieRealizada {
   serieNum: number
@@ -37,8 +43,26 @@ export interface TreinoFicha {
   id: string
   nome: string
   grupo: string
+  createdAt?: string
+  updatedAt?: string
   exercicios: ExercicioFicha[]
 }
+
+export interface ExercicioFichaInput {
+  id?: string
+  nome: string
+  series: number
+  reps: number
+  cargaSugerida: number
+}
+
+export interface TreinoFichaInput {
+  nome: string
+  grupo: string
+  exercicios: ExercicioFichaInput[]
+}
+
+// ── Acompanhamento do aluno ────────────────────────────────────────────
 
 export interface HistoricoPesoEntry {
   data: string
@@ -49,6 +73,8 @@ export interface FrequenciaEntry {
   data: string
   presente: boolean
 }
+
+// ── Entidades principais ────────────────────────────────────────────────
 
 export interface Aluno {
   id: string
@@ -87,6 +113,8 @@ export interface Professor {
   salario: number
   especialidade: string
   status: ProfessorStatus
+  feriasInicio?: string
+  feriasFim?: string
 }
 
 export interface Turma {
@@ -100,6 +128,7 @@ export interface Turma {
   sala: string
   alunoIds: string[]
   status: TurmaStatus
+  createdAt?: string
 }
 
 export interface Plano {
@@ -131,6 +160,8 @@ export interface Conquista {
   nivel: 'bronze' | 'prata' | 'ouro' | 'platina'
   criterio: string
 }
+
+// ── Estado agregado da aplicação ─────────────────────────────────────────
 
 export interface AppState {
   alunos: Aluno[]

@@ -8,6 +8,9 @@ import Financeiro from './modals/Financeiro'
 import AgendaAdmin from './modals/AgendaAdmin'
 import Relatorios from './modals/Relatorios'
 import Planos from './modals/Planos'
+import { formatLocalDate, subtractLocalDays, toLocalDate } from '../../lib/date'
+
+// ── Tipos e funções auxiliares ───────────────────────────────────────
 
 type ModalType = 'alunos' | 'professores' | 'financeiro' | 'agenda' | 'relatorios' | 'planos' | null
 
@@ -17,8 +20,11 @@ function getGreeting() {
 }
 
 export default function AdminDashboard() {
+  // ── Sessão, dados e estado local ──────────────────────────────────────
+
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
+  const displayName = useAuthStore((s) => s.displayName)
   const { alunos, professores, turmas, planos, transacoes, loadAll, loading, error } = useDataStore()
 
   const [modal, setModal] = useState<ModalType>(null)
@@ -38,6 +44,8 @@ export default function AdminDashboard() {
     )
   }
 
+  // ── Indicadores calculados ───────────────────────────────────────────
+
   const alunosAtivos = alunos.filter(a => a.status === 'ativo').length
   const emAtraso = alunos.filter(a => a.pagamentoStatus === 'atrasado' || a.status === 'atrasado').length
   const professoresAtivos = professores.filter(p => p.status === 'ativo').length
@@ -49,18 +57,24 @@ export default function AdminDashboard() {
   const ocupadas = turmas.reduce((s, t) => s + t.alunoIds.length, 0)
   const ocupacaoPct = totalVagas > 0 ? Math.round((ocupadas / totalVagas) * 100) : 0
 
+  const inicioJanelaFrequencia = subtractLocalDays(13)
+  const dataMinimaParaAlerta = subtractLocalDays(14)
+  const hoje = toLocalDate()
   const evasaoRisco = alunos.filter(a => {
-    const freq = a.frequencia.slice(-14)
+    if (a.matriculaData > dataMinimaParaAlerta) return false
+    const freq = a.frequencia.filter(f => f.data >= inicioJanelaFrequencia && f.data <= hoje)
     const presentes = freq.filter(f => f.presente).length
     return a.status === 'ativo' && presentes < 3
   })
 
   const atividades = [
-    ...alunos.slice(-3).map(a => ({ icon: '👤', msg: `${a.nome} foi cadastrado(a)`, data: a.matriculaData })),
-    ...turmas.slice(-2).map(t => ({ icon: '📅', msg: `Turma "${t.nome}" criada`, data: new Date().toISOString().split('T')[0] })),
+    ...alunos.map(a => ({ icon: '👤', msg: `${a.nome} foi cadastrado(a)`, data: a.matriculaData })),
+    ...turmas.map(t => ({ icon: '📅', msg: `Turma "${t.nome}" criada`, data: t.createdAt?.slice(0, 10) ?? toLocalDate() })),
   ].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 5)
 
   const fmtReal = (v: number) => `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
+
+  // ── Atalhos do painel ─────────────────────────────────────────────────
 
   const QUICK_LINKS = [
     { label: 'Gerenciar Alunos', modal: 'alunos' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg> },
@@ -70,6 +84,8 @@ export default function AdminDashboard() {
     { label: 'Relatórios', modal: 'relatorios' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6" /></svg> },
     { label: 'Planos da Academia', modal: 'planos' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><circle cx="7" cy="7" r="1" /></svg> },
   ]
+
+  // ── Interface principal ────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -81,7 +97,9 @@ export default function AdminDashboard() {
             </svg>
           </div>
           <div>
-            <p className="text-white font-bold text-sm">FitPro</p>
+            <div className="flex items-center gap-2">
+              <p className="text-white font-bold text-sm">FitPro</p>
+            </div>
             <p className="text-[#52525b] text-xs">Painel Administrativo</p>
           </div>
         </div>
@@ -97,7 +115,7 @@ export default function AdminDashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white font-mono">{getGreeting()}, Administrador</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white font-mono">{getGreeting()}, {displayName?.trim() || 'Administrador'}</h1>
             <p className="text-[#71717a] text-sm mt-1">Aqui está o resumo da sua academia hoje.</p>
           </div>
           <button onClick={() => setModal('alunos')}
@@ -211,7 +229,7 @@ export default function AdminDashboard() {
                   <div key={i} className="flex items-center gap-3 bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl px-4 py-3">
                     <span className="text-lg">{a.icon}</span>
                     <p className="text-[#a1a1aa] text-sm flex-1">{a.msg}</p>
-                    <p className="text-[#3f3f46] text-xs">{new Date(a.data).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[#3f3f46] text-xs">{formatLocalDate(a.data)}</p>
                   </div>
                 ))}
               </div>
