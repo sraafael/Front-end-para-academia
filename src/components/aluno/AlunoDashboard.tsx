@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import type { Aluno, Plano, TreinoFicha } from '../../types'
 import { CONQUISTAS_CATALOGO } from '../../constants'
 import { useAuthStore } from '../../store/authStore'
@@ -83,8 +82,7 @@ const PREVIEW_ALUNO: Aluno = {
   vencimento: subtractLocalDays(-15),
 }
 
-// ── Saudação e mensagem contextual ─────────────────────────────────────
-
+// Saudação e mensagem contextual
 function getGreeting(nome: string): string {
   const h = new Date().getHours()
   const first = nome.split(' ')[0]
@@ -111,6 +109,16 @@ function getFraseDinamica(aluno: Aluno): string {
   return 'Cada treino é um passo para a melhor versão de você.'
 }
 
+function displayPaymentMethod(value: string) {
+  const normalized = value.trim().toLocaleLowerCase('pt-BR')
+  if (normalized === 'pix') return 'PIX'
+  if (normalized === 'pix / cartão' || normalized === 'pix / cartao') return 'PIX / Cartão'
+  if (normalized.includes('cartão') || normalized.includes('cartao')) return 'Cartão de Crédito'
+  if (normalized === 'boleto') return 'Boleto'
+  if (normalized === 'dinheiro') return 'Dinheiro'
+  return value || '—'
+}
+
 const NIVEL_CORES = {
   bronze: 'text-amber-600 bg-amber-600/10 border-amber-600/30',
   prata: 'text-zinc-300 bg-zinc-500/10 border-zinc-500/30',
@@ -118,8 +126,63 @@ const NIVEL_CORES = {
   platina: 'text-cyan-300 bg-cyan-400/10 border-cyan-400/30',
 }
 
-// ── Resumo da meta semanal ────────────────────────────────────────────
+function WeightHistoryChart({ data, min, max }: {
+  data: Array<{ data: string; peso: number }>
+  min: number
+  max: number
+}) {
+  const width = 520
+  const height = 180
+  const paddingX = 38
+  const paddingY = 18
+  const range = Math.max(max - min, 1)
+  const plotWidth = width - paddingX * 2
+  const plotHeight = height - paddingY * 2
+  const points = data.map((item, index) => ({
+    ...item,
+    x: paddingX + (data.length === 1 ? plotWidth / 2 : (index / (data.length - 1)) * plotWidth),
+    y: paddingY + ((max - item.peso) / range) * plotHeight,
+  }))
 
+  if (points.length === 0) {
+    return <p className="h-[180px] flex items-center justify-center text-[#52525b] text-xs">Nenhum peso registrado.</p>
+  }
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[180px]" role="img" aria-label="Evolução do peso">
+      {[0, 1, 2, 3].map(index => {
+        const y = paddingY + (index / 3) * plotHeight
+        const value = max - (index / 3) * range
+        return (
+          <g key={index}>
+            <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="#1f1f1f" strokeDasharray="3 3" />
+            <text x={paddingX - 6} y={y + 3} textAnchor="end" fill="#52525b" fontSize="10">{value.toFixed(1)}</text>
+          </g>
+        )
+      })}
+      {points.length > 1 && (
+        <polyline
+          points={points.map(point => `${point.x},${point.y}`).join(' ')}
+          fill="none"
+          stroke="#f97316"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
+      {points.map(point => (
+        <g key={`${point.data}-${point.peso}`}>
+          <circle cx={point.x} cy={point.y} r="4" fill="#f97316">
+            <title>{point.data}: {point.peso} kg</title>
+          </circle>
+          <text x={point.x} y={height - 3} textAnchor="middle" fill="#52525b" fontSize="10">{point.data}</text>
+        </g>
+      ))}
+    </svg>
+  )
+}
+
+// Resumo da meta semanal
 function MetaSemanalCard({ aluno }: { aluno: Aluno }) {
   const hoje = new Date()
   const diasSemana: { date: Date; label: string; presente: boolean }[] = []
@@ -167,8 +230,7 @@ function MetaSemanalCard({ aluno }: { aluno: Aluno }) {
   )
 }
 
-// ── Modal de conquistas ─────────────────────────────────────────────────
-
+// Modal de conquistas
 function ConquistasModal({ aluno, onClose }: { aluno: Aluno; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -206,8 +268,7 @@ function ConquistasModal({ aluno, onClose }: { aluno: Aluno; onClose: () => void
   )
 }
 
-// ── Modal de evolução do peso ─────────────────────────────────────────
-
+// Modal de evolução do peso
 function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onClose: () => void; onAtualizar: (p: number) => Promise<void> }) {
   const [novoPeso, setNovoPeso] = useState('')
   const [saving, setSaving] = useState(false)
@@ -261,20 +322,7 @@ function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onC
               </svg>
               <p className="text-white text-sm font-semibold">Evolução Corporal</p>
             </div>
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f1f1f" />
-                <XAxis dataKey="data" tick={{ fill: '#52525b', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis domain={[min, max]} tick={{ fill: '#52525b', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px', fontSize: '12px' }}
-                  labelStyle={{ color: '#a1a1aa' }}
-                  itemStyle={{ color: '#f97316' }}
-                  formatter={(v) => [`${v} kg`, 'Peso']}
-                />
-                <Line type="monotone" dataKey="peso" stroke="#f97316" strokeWidth={2} dot={{ fill: '#f97316', r: 4 }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            <WeightHistoryChart data={chartData} min={min} max={max} />
           </div>
 
           <div className="bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl p-4">
@@ -318,8 +366,7 @@ function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onC
   )
 }
 
-// ── Execução da ficha de treino ────────────────────────────────────────
-
+// Execução da ficha de treino
 function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie: (exId: string, serieNum: number, carga: number, reps: number) => Promise<void> }) {
   const [cargas, setCargas] = useState<Record<string, Record<number, { carga: string; reps: string }>>>({})
   const [saveError, setSaveError] = useState('')
@@ -421,8 +468,7 @@ function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie
   )
 }
 
-// ── Mensalidade e forma de pagamento ─────────────────────────────────────
-
+// Mensalidade e forma de pagamento
 function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefined }) {
   const [showPix, setShowPix] = useState(false)
 
@@ -539,7 +585,7 @@ function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefin
         {[
           { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="1.8"><path d="M6.5 6.5a6 6 0 0 0 0 11M17.5 6.5a6 6 0 0 1 0 11M3 12h18M12 3v18" /></svg>, label: 'Plano', value: plano?.nome ?? '—', iconBg: 'bg-[#1a3a1a]' },
           { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>, label: 'Membro desde', value: mesMatricula, iconBg: 'bg-[#1a2a3a]' },
-          { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>, label: 'Forma de pagamento', value: aluno.formaPagamento, iconBg: 'bg-[#2a2a1a]' },
+          { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>, label: 'Forma de pagamento', value: displayPaymentMethod(aluno.formaPagamento), iconBg: 'bg-[#2a2a1a]' },
         ].map(c => (
           <div key={c.label} className="bg-[#111111] border border-[#1f1f1f] rounded-2xl p-4 flex flex-col items-center text-center gap-2">
             <div className={`w-10 h-10 rounded-xl ${c.iconBg} flex items-center justify-center`}>{c.icon}</div>
@@ -552,8 +598,7 @@ function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefin
   )
 }
 
-// ── Painel principal do aluno ───────────────────────────────────────────
-
+// Painel principal do aluno
 export default function AlunoDashboard() {
   const navigate = useNavigate()
   const { currentAlunoId, logout, isPreviewMode, exitPreview } = useAuthStore()
@@ -562,22 +607,26 @@ export default function AlunoDashboard() {
   const aluno = isPreviewMode ? PREVIEW_ALUNO : alunos.find(a => a.id === currentAlunoId)
   const plano = isPreviewMode ? PREVIEW_PLAN : planos.find(p => p.id === aluno?.planoId)
 
-  // ── Estado local e carregamento ────────────────────────────────────────
-  const [tab, setTab] = useState<string>('mensalidade')
+  // Estado local e carregamento
+  const [tab, setTab] = useState<string>('')
   const [showConquistas, setShowConquistas] = useState(false)
   const [showPeso, setShowPeso] = useState(false)
+  const treinoIds = aluno?.treinos.map(treino => treino.id).join('|') ?? ''
 
   useEffect(() => {
     if (currentAlunoId && !isPreviewMode) loadAluno(currentAlunoId)
   }, [currentAlunoId, isPreviewMode, loadAluno])
 
   useEffect(() => {
-    if (aluno?.treinos && aluno.treinos.length > 0) {
-      setTab(aluno.treinos[0].id)
-    }
-  }, [aluno])
+    if (!aluno) return
+    const idsDisponiveis = aluno.treinos.map(treino => treino.id)
+    setTab(tabAtual => {
+      if (tabAtual === 'mensalidade' || idsDisponiveis.includes(tabAtual)) return tabAtual
+      return idsDisponiveis[0] ?? 'mensalidade'
+    })
+  }, [aluno?.id, treinoIds])
 
-  // ── Estados de carregamento e perfil ausente ───────────────────────────────
+  // Estados de carregamento e perfil ausente
   if (loading && !aluno) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -588,7 +637,7 @@ export default function AlunoDashboard() {
   
   if (!aluno) return null
 
-  // ── Ações do painel ─────────────────────────────────────────────────────
+  // Ações do painel
   const onLogout = () => { logout(); navigate('/login') }
   const onExitPreview = () => { exitPreview(); navigate('/admin/dashboard') }
   const onUpdatePeso = (p: number) => isPreviewMode
@@ -600,9 +649,9 @@ export default function AlunoDashboard() {
       : checkSerie(aluno.id, treinoId, exId, sn, carga, reps)
 
   const pesoAtual = aluno.historicoPeso[aluno.historicoPeso.length - 1]?.peso
+    ?? (aluno.peso > 0 ? aluno.peso : undefined)
 
-  // ── Interface principal ────────────────────────────────────────────────
-
+  // Interface principal
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <header className="border-b border-[#1f1f1f] px-6 py-3 flex items-center justify-between sticky top-0 bg-[#0a0a0a] z-40">

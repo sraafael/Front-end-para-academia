@@ -77,8 +77,7 @@ const PREVIEW_TURMA: Turma = {
   createdAt: new Date().toISOString(),
 }
 
-// ── Saudação e mensagem contextual ─────────────────────────────────────
-
+// Saudação e mensagem contextual
 function getGreeting() {
   const h = new Date().getHours()
   return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'
@@ -92,8 +91,7 @@ function getMotivacao(): string {
 }
 
 export default function ProfessorDashboard() {
-  // ── Sessão, dados e estado local ──────────────────────────────────────
-
+  // Sessão, dados e estado local
   const navigate = useNavigate()
   const { currentProfessorId, logout, isPreviewMode, exitPreview } = useAuthStore()
   const { professores, turmas, alunos, loadProfessorDashboard, saveAttendance, loading, error } = useDataStore()
@@ -132,13 +130,12 @@ export default function ProfessorDashboard() {
     )
   }
 
-  // ── Turmas, alunos e alertas calculados ─────────────────────────────────
-
+  // Turmas, alunos e alertas calculados
   const minhasTurmas = displayedTurmas.filter(t => t.professorId === professor.id)
   const meusAlunos = displayedAlunos.filter(a => a.professorId === professor.id)
   const sorted = [...minhasTurmas].sort((a, b) => a.horario.localeCompare(b.horario))
   const horasTrabalhadas = () => {
-    const mins = minhasTurmas.reduce((s, t) => s + 60, 0)
+    const mins = minhasTurmas.length * 60
     return `${Math.floor(mins / 60)}h ${mins % 60 > 0 ? `${mins % 60}m` : ''}`
   }
 
@@ -163,8 +160,7 @@ export default function ProfessorDashboard() {
   }, [])
   const treinoAluno = treinoAlunoId ? displayedAlunos.find(aluno => aluno.id === treinoAlunoId) ?? null : null
 
-  // ── Controle da chamada ───────────────────────────────────────────────────
-
+  // Controle da chamada
   const abrirChamada = (turma: Turma) => {
     const alunosDaTurma = displayedAlunos.filter(aluno => turma.alunoIds.includes(aluno.id))
     setPresencas(Object.fromEntries(alunosDaTurma.map(aluno => [
@@ -193,8 +189,7 @@ export default function ProfessorDashboard() {
     }
   }
 
-  // ── Tela de chamada da turma selecionada ─────────────────────────────────
-
+  // Tela de chamada da turma selecionada
   if (chamadaTurma) {
     const alunosDaTurma = displayedAlunos.filter(a => chamadaTurma.alunoIds.includes(a.id))
     return (
@@ -271,8 +266,7 @@ export default function ProfessorDashboard() {
     )
   }
 
-  // ── Interface principal ────────────────────────────────────────────────
-
+  // Interface principal
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <header className="border-b border-[#1f1f1f] px-6 py-3 flex items-center justify-between sticky top-0 bg-[#0a0a0a] z-40">
@@ -312,13 +306,11 @@ export default function ProfessorDashboard() {
             </div>
           </div>
         )}
-        {/* ── Saudação ── */}
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white font-mono">{getGreeting()}, {firstName}!</h1>
           <p className="text-[#71717a] text-sm mt-1">{getMotivacao()}</p>
         </div>
 
-        {/* ── Indicadores ── */}
         <div className="grid grid-cols-3 gap-3">
           {[
             { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>, label: 'Aulas Hoje', value: minhasTurmas.length, color: 'bg-[#1a2a3a] text-blue-400' },

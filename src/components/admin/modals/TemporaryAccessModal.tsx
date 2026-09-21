@@ -1,7 +1,6 @@
 import { useState } from 'react'
 
-// ── Dados da credencial temporária ─────────────────────────────────────
-
+// Dados da credencial temporária
 interface Props {
   nome: string
   cpf: string
@@ -12,8 +11,7 @@ interface Props {
 }
 
 export default function TemporaryAccessModal({ nome, cpf, perfil, senha, mode = 'created', onClose }: Props) {
-  // ── Cópia segura da mensagem de primeiro acesso ───────────────────────────────
-
+  // Cópia segura da mensagem de primeiro acesso
   const [copiado, setCopiado] = useState(false)
   const cpfLimpo = cpf.replace(/\D/g, '')
   const accessMoment = mode === 'reset' ? 'acesso após redefinição' : 'primeiro acesso'

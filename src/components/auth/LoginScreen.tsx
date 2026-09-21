@@ -5,8 +5,7 @@ import { formatCpf, isValidCpf } from '../../lib/cpf'
 import { login } from '../../api/auth'
 import type { UserRole } from '../../types'
 
-// ── Aparência e orientação por perfil ────────────────────────────────────
-
+// Aparência e orientação por perfil
 const ROLE_CONFIG: Record<UserRole, {
   label: string
   hint: string
@@ -62,8 +61,7 @@ const ROLE_CONFIG: Record<UserRole, {
 }
 
 export default function LoginScreen() {
-  // ── Perfil da rota e estado do formulário ──────────────────────────────────
-
+  // Perfil da rota e estado do formulário
   const params = useParams()
   const VALID: UserRole[] = ['owner', 'admin', 'professor', 'aluno']
   const role: UserRole = VALID.includes(params.role as UserRole) ? (params.role as UserRole) : 'admin'
@@ -79,8 +77,7 @@ export default function LoginScreen() {
 
   const config = ROLE_CONFIG[role] ?? ROLE_CONFIG.admin
 
-  // ── Formatação e envio das credenciais ────────────────────────────────────
-
+  // Formatação e envio das credenciais
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -107,8 +104,7 @@ export default function LoginScreen() {
     }
   }
 
-  // ── Interface de login ────────────────────────────────────────────────────
-
+  // Interface de login
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col px-4 py-8">
       <button

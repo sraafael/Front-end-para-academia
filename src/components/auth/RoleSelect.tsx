@@ -4,8 +4,7 @@ import type { UserRole } from '../../types'
 export default function RoleSelect() {
   const navigate = useNavigate()
 
-  // ── Perfis disponíveis ────────────────────────────────────────────────
-
+  // Perfis disponíveis
   const roles = [
     {
       role: 'owner' as UserRole,
@@ -64,8 +63,7 @@ export default function RoleSelect() {
     },
   ]
 
-  // ── Seleção do tipo de acesso ────────────────────────────────────────
-
+  // Seleção do tipo de acesso
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
       <div className="flex flex-col items-center mb-12">

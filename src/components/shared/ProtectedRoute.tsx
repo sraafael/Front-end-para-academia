@@ -6,8 +6,7 @@ interface Props {
   role: UserRole
 }
 
-// ── Proteção de acesso por perfil ─────────────────────────────────────
-
+// Proteção de acesso por perfil
 export default function ProtectedRoute({ role }: Props) {
   const { isAuthenticated, role: userRole, pendingFirstLogin } = useAuthStore()
 

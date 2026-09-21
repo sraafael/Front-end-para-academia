@@ -10,8 +10,7 @@ import Relatorios from './modals/Relatorios'
 import Planos from './modals/Planos'
 import { formatLocalDate, subtractLocalDays, toLocalDate } from '../../lib/date'
 
-// ── Tipos e funções auxiliares ───────────────────────────────────────
-
+// Tipos e funções auxiliares
 type ModalType = 'alunos' | 'professores' | 'financeiro' | 'agenda' | 'relatorios' | 'planos' | null
 
 function getGreeting() {
@@ -20,12 +19,11 @@ function getGreeting() {
 }
 
 export default function AdminDashboard() {
-  // ── Sessão, dados e estado local ──────────────────────────────────────
-
+  // Sessão, dados e estado local
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
   const displayName = useAuthStore((s) => s.displayName)
-  const { alunos, professores, turmas, planos, transacoes, loadAll, loading, error } = useDataStore()
+  const { alunos, professores, turmas, transacoes, loadAll, loading, error } = useDataStore()
 
   const [modal, setModal] = useState<ModalType>(null)
 
@@ -44,8 +42,7 @@ export default function AdminDashboard() {
     )
   }
 
-  // ── Indicadores calculados ───────────────────────────────────────────
-
+  // Indicadores calculados
   const alunosAtivos = alunos.filter(a => a.status === 'ativo').length
   const emAtraso = alunos.filter(a => a.pagamentoStatus === 'atrasado' || a.status === 'atrasado').length
   const professoresAtivos = professores.filter(p => p.status === 'ativo').length
@@ -74,8 +71,7 @@ export default function AdminDashboard() {
 
   const fmtReal = (v: number) => `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
 
-  // ── Atalhos do painel ─────────────────────────────────────────────────
-
+  // Atalhos do painel
   const QUICK_LINKS = [
     { label: 'Gerenciar Alunos', modal: 'alunos' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg> },
     { label: 'Gerenciar Professores', modal: 'professores' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" /></svg> },
@@ -85,8 +81,7 @@ export default function AdminDashboard() {
     { label: 'Planos da Academia', modal: 'planos' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><circle cx="7" cy="7" r="1" /></svg> },
   ]
 
-  // ── Interface principal ────────────────────────────────────────────────
-
+  // Interface principal
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <header className="border-b border-[#1f1f1f] px-6 py-3 flex items-center justify-between sticky top-0 bg-[#0a0a0a] z-40">

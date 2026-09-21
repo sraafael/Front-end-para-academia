@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { projectId, publicAnonKey } from '../../utils/supabase/info'
 
-// ── Cliente compartilhado do Supabase ──────────────────────────────────────
+// Cliente usado em toda a aplicação.
 
 export const supabase = createClient(
   `https://${projectId}.supabase.co`,
@@ -13,5 +13,3 @@ export const supabase = createClient(
     },
   }
 )
-
-export type Database = typeof supabase

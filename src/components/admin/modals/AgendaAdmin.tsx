@@ -5,14 +5,12 @@ import { toLocalDate } from '../../../lib/date'
 
 interface Props { onClose: () => void }
 
-// ── Opções de cadastro ────────────────────────────────────────────────
-
+// Opções de cadastro
 const MODALIDADES = ['Musculação', 'Funcional', 'Crossfit', 'Personal', 'Pilates', 'Natação', 'HIIT', 'Yoga', 'Hidroginástica']
 const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 export default function AgendaAdmin({ onClose }: Props) {
-  // ── Dados e estado dos modais ─────────────────────────────────────────
-
+  // Dados e estado dos modais
   const { turmas, professores, alunos, addTurma, saveAttendance } = useDataStore()
   const [showNovaTurma, setShowNovaTurma] = useState(false)
   const [chamadaTurma, setChamadaTurma] = useState<Turma | null>(null)
@@ -22,8 +20,7 @@ export default function AgendaAdmin({ onClose }: Props) {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // ── Campos da nova turma ────────────────────────────────────────────────
-
+  // Campos da nova turma
   const [nome, setNome] = useState('')
   const [modalidade, setModalidade] = useState('')
   const [horario, setHorario] = useState('')
@@ -34,8 +31,7 @@ export default function AgendaAdmin({ onClose }: Props) {
 
   const toggleDia = (d: string) => setDiasSelecionados(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
 
-  // ── Cadastro da turma ──────────────────────────────────────────────────
-
+  // Cadastro da turma
   const handleCriar = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
@@ -57,8 +53,7 @@ export default function AgendaAdmin({ onClose }: Props) {
 
   const hoje = toLocalDate()
 
-  // ── Registro de presenças ──────────────────────────────────────────────
-
+  // Registro de presenças
   const abrirChamada = (turma: Turma) => {
     const alunosDaTurma = alunos.filter(aluno => turma.alunoIds.includes(aluno.id))
     setPresencas(Object.fromEntries(alunosDaTurma.map(aluno => [
@@ -92,8 +87,7 @@ export default function AgendaAdmin({ onClose }: Props) {
 
   const sorted = [...turmas].sort((a, b) => a.horario.localeCompare(b.horario))
 
-  // ── Interface principal ────────────────────────────────────────────────
-
+  // Interface principal
   if (chamadaTurma) {
     const alunosDaTurma = alunos.filter(a => chamadaTurma.alunoIds.includes(a.id))
     return (

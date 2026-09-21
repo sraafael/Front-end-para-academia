@@ -1,13 +1,11 @@
--- ═══════════════════════════════════════════════════════════════════════════
 -- FitPro — Schema completo
 -- Cole este arquivo inteiro no SQL Editor do Supabase e execute (Run All).
 -- É idempotente: pode ser executado mais de uma vez sem erros.
--- ═══════════════════════════════════════════════════════════════════════════
 
--- ── Extensões ────────────────────────────────────────────────────────────────
+-- Extensões
 create extension if not exists "pgcrypto";
 
--- ── Enums ────────────────────────────────────────────────────────────────────
+-- Enums
 do $$ begin create type user_role        as enum ('admin','professor','aluno');    exception when duplicate_object then null; end $$;
 do $$ begin create type pagamento_status as enum ('pago','pendente','atrasado');   exception when duplicate_object then null; end $$;
 do $$ begin create type professor_status as enum ('ativo','ferias','inativo');     exception when duplicate_object then null; end $$;
@@ -15,7 +13,7 @@ do $$ begin create type aluno_status     as enum ('ativo','atrasado','inativo');
 do $$ begin create type turma_status     as enum ('concluida','em_andamento','proxima','cancelada'); exception when duplicate_object then null; end $$;
 do $$ begin create type transacao_tipo   as enum ('receita','despesa');            exception when duplicate_object then null; end $$;
 
--- ── profiles (espelho de auth.users com o campo role) ────────────────────────
+-- Perfis de acesso ligados ao auth.users
 create table if not exists profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
   role       user_role not null default 'aluno',
@@ -52,7 +50,7 @@ create policy "profiles: admin read all" on profiles for select using (
   public.is_fitpro_admin()
 );
 
--- ── planos ───────────────────────────────────────────────────────────────────
+-- Planos
 create table if not exists planos (
   id          uuid primary key default gen_random_uuid(),
   nome        text not null unique,
@@ -72,7 +70,7 @@ create policy "planos: admin write" on planos for all    using (
   public.is_fitpro_admin()
 );
 
--- ── professores ─────────────────────────────────────────────────────────────
+-- Professores
 create table if not exists professores (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid unique references auth.users(id) on delete set null,
@@ -102,7 +100,7 @@ create policy "professores: admin all" on professores for all    using (
 );
 create policy "professores: own read" on professores for select using (user_id = auth.uid());
 
--- ── alunos ───────────────────────────────────────────────────────────────────
+-- Alunos
 create table if not exists alunos (
   id                       uuid primary key default gen_random_uuid(),
   user_id                  uuid unique references auth.users(id) on delete set null,
@@ -149,7 +147,7 @@ create policy "alunos: own read"   on alunos for select using (user_id = auth.ui
 create policy "alunos: own update" on alunos for update
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
--- ── turmas ───────────────────────────────────────────────────────────────────
+-- Turmas
 create table if not exists turmas (
   id           uuid primary key default gen_random_uuid(),
   nome         text not null,
@@ -172,7 +170,7 @@ create policy "turmas: admin write" on turmas for all    using (
   public.is_fitpro_admin()
 );
 
--- ── historico_peso ───────────────────────────────────────────────────────────
+-- Histórico de peso
 create table if not exists historico_peso (
   id         uuid primary key default gen_random_uuid(),
   aluno_id   uuid not null references alunos(id) on delete cascade,
@@ -191,7 +189,7 @@ create policy "historico_peso: own all" on historico_peso for all using (
   exists (select 1 from alunos where id = aluno_id and user_id = auth.uid())
 );
 
--- ── frequencia ───────────────────────────────────────────────────────────────
+-- Frequência
 create table if not exists frequencia (
   id         uuid primary key default gen_random_uuid(),
   aluno_id   uuid not null references alunos(id) on delete cascade,
@@ -227,7 +225,7 @@ create policy "frequencia: own read" on frequencia for select using (
   exists (select 1 from alunos where id = aluno_id and user_id = auth.uid())
 );
 
--- ── transacoes ───────────────────────────────────────────────────────────────
+-- Transações
 -- Apenas admin pode ver ou modificar transações financeiras.
 create table if not exists transacoes (
   id         uuid primary key default gen_random_uuid(),
@@ -247,7 +245,7 @@ create policy "transacoes: admin all" on transacoes for all using (
   public.is_fitpro_admin()
 );
 
--- ── treinos ──────────────────────────────────────────────────────────────────
+-- Treinos
 create table if not exists treinos (
   id         uuid primary key default gen_random_uuid(),
   aluno_id   uuid not null references alunos(id) on delete cascade,
@@ -283,7 +281,7 @@ create policy "treinos: own read" on treinos for select using (
   exists (select 1 from alunos where id = aluno_id and user_id = auth.uid())
 );
 
--- ── exercicios ───────────────────────────────────────────────────────────────
+-- Exercícios
 create table if not exists exercicios (
   id             uuid primary key default gen_random_uuid(),
   treino_id      uuid not null references treinos(id) on delete cascade,
@@ -325,7 +323,7 @@ create policy "exercicios: own read" on exercicios for select using (
   )
 );
 
--- ── series_realizadas ────────────────────────────────────────────────────────
+-- Séries realizadas
 create table if not exists series_realizadas (
   id           uuid primary key default gen_random_uuid(),
   exercicio_id uuid not null references exercicios(id) on delete cascade,
@@ -632,7 +630,7 @@ having count(t.id) = 0 or max(t.updated_at) < now() - interval '45 days';
 
 grant select on public.alertas_treino to authenticated;
 
--- ── Trigger: cria profile automaticamente ao registrar usuário ───────────────
+-- Cria o perfil automaticamente ao registrar um usuário.
 create or replace function handle_new_user()
 returns trigger language plpgsql security definer as $$
 declare

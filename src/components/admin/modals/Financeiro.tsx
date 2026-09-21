@@ -6,14 +6,12 @@ interface Props { onClose: () => void }
 
 type ModalType = 'receita' | 'despesa' | null
 
-// ── Categorias financeiras ────────────────────────────────────────────
-
+// Categorias financeiras
 const CATEGORIAS_RECEITA = ['Mensalidade', 'Matrícula', 'Personal Training', 'Loja / Suplementos', 'Outros']
 const CATEGORIAS_DESPESA = ['Aluguel', 'Energia', 'Água', 'Internet', 'Folha de Pagamento', 'Manutenção', 'Limpeza', 'Marketing', 'Equipamentos', 'Outros']
 
 export default function Financeiro({ onClose }: Props) {
-  // ── Dados e estado do lançamento ────────────────────────────────────────
-
+  // Dados e estado do lançamento
   const { transacoes, professores, alunos, planos, addTransacao } = useDataStore()
   const [subModal, setSubModal] = useState<ModalType>(null)
   const [categoria, setCategoria] = useState('')
@@ -23,8 +21,7 @@ export default function Financeiro({ onClose }: Props) {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
-  // ── Totais e indicadores ─────────────────────────────────────────────
-
+  // Totais e indicadores
   const receitas = transacoes.filter(t => t.tipo === 'receita')
   const despesas = transacoes.filter(t => t.tipo === 'despesa')
   const totalReceitas = receitas.reduce((s, t) => s + t.valor, 0)
@@ -55,8 +52,7 @@ export default function Financeiro({ onClose }: Props) {
 
   const valorNumerico = parseFloat(valor.replace(/\./g, '').replace(',', '.')) || 0
 
-  // ── Inclusão de receita ou despesa ──────────────────────────────────────
-
+  // Inclusão de receita ou despesa
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
@@ -84,8 +80,7 @@ export default function Financeiro({ onClose }: Props) {
 
   const categorias = subModal === 'receita' ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA
 
-  // ── Modal de novo lançamento ─────────────────────────────────────────
-
+  // Modal de novo lançamento
   if (subModal) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -146,8 +141,7 @@ export default function Financeiro({ onClose }: Props) {
     )
   }
 
-  // ── Visão geral financeira ──────────────────────────────────────────
-
+  // Visão geral financeira
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">

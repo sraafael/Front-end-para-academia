@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Aluno, TreinoFicha, TreinoFichaInput } from '../../types'
 import { useDataStore } from '../../store/dataStore'
 
-// ── Contratos do modal ───────────────────────────────────────────────────
-
+// Contratos do modal
 interface Props {
   aluno: Aluno
   onClose: () => void
@@ -19,8 +18,7 @@ interface ExercicioDraft {
   cargaSugerida: string
 }
 
-// ── Valores iniciais e utilitários ──────────────────────────────────────
-
+// Valores iniciais e utilitários
 const novoExercicio = (): ExercicioDraft => ({
   key: crypto.randomUUID(),
   nome: '',
@@ -35,8 +33,7 @@ function diasDesde(data?: string) {
 }
 
 export default function TreinoProfessorModal({ aluno, onClose, readOnly = false }: Props) {
-  // ── Estado do formulário ─────────────────────────────────────────────
-
+  // Estado do formulário
   const saveTreino = useDataStore(state => state.saveTreino)
   const [editando, setEditando] = useState(aluno.treinos.length === 0)
   const [treinoId, setTreinoId] = useState<string | null>(null)
@@ -55,8 +52,7 @@ export default function TreinoProfessorModal({ aluno, onClose, readOnly = false 
     return timestamps.length > 0 ? new Date(Math.max(...timestamps)).toISOString() : undefined
   }, [aluno.treinos])
 
-  // ── Ações de criação e edição ───────────────────────────────────────
-
+  // Ações de criação e edição
   const iniciarNova = () => {
     setTreinoId(null)
     setNome('')
@@ -131,8 +127,7 @@ export default function TreinoProfessorModal({ aluno, onClose, readOnly = false 
     }
   }
 
-  // ── Interface do modal ───────────────────────────────────────────────────
-
+  // Interface do modal
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden">

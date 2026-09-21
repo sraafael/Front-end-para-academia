@@ -4,8 +4,7 @@ import { useAuthStore } from '../../store/authStore'
 import { confirmFirstLogin } from '../../api/auth'
 
 export default function FirstLoginReset() {
-  // ── Sessão e campos da nova senha ──────────────────────────────────────
-
+  // Sessão e campos da nova senha
   const navigate = useNavigate()
   const { role, currentAlunoId, currentProfessorId, currentAdminId, setPendingFirstLogin } = useAuthStore()
 
@@ -15,8 +14,7 @@ export default function FirstLoginReset() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // ── Validação e confirmação do primeiro acesso ──────────────────────────────
-
+  // Validação e confirmação do primeiro acesso
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -38,8 +36,7 @@ export default function FirstLoginReset() {
     }
   }
 
-  // ── Interface de redefinição ─────────────────────────────────────────
-
+  // Interface de redefinição
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-md">

@@ -2,8 +2,7 @@ import { supabase } from '../lib/supabase'
 import type { UserRole } from '../types'
 import { isValidCpf } from '../lib/cpf'
 
-// ── Tipos e identificação do usuário ────────────────────────────────────
-
+// Tipos e identificação do usuário
 export type LoginResult =
   | { ok: true; role: UserRole; userId: string | null; displayName: string; isFirstLogin?: boolean; isOwner: boolean; isPreview: boolean }
   | { ok: false; error: string }
@@ -20,8 +19,7 @@ export function cpfToEmail(role: UserRole, cpf: string): string {
   return `${role}.${digits}@fitpro.internal`
 }
 
-// ── Entrada e validação do perfil ────────────────────────────────────────
-
+// Entrada e validação do perfil
 export async function login(role: UserRole, cpf: string, senha: string): Promise<LoginResult> {
   if (!isValidCpf(cpf)) {
     return { ok: false, error: 'Informe um CPF válido.' }
@@ -126,21 +124,18 @@ export async function lookupCpf(role: UserRole, cpf: string): Promise<boolean> {
   return !!data
 }
 
-// ── Primeiro acesso ──────────────────────────────────────────────────────
-
+// Primeiro acesso
 export async function confirmFirstLogin(role: UserRole, entityId: string, novaSenha: string): Promise<void> {
   // 1. Atualiza a senha no núcleo de autenticação do Supabase
   const { error: passErr } = await supabase.auth.updateUser({ password: novaSenha })
   if (passErr) throw new Error(passErr.message)
 
-  // 2. Descobre qual tabela atualizar
-  const table = role === 'owner' || role === 'admin' ? 'academy_admins' : role === 'professor' ? 'professores' : 'alunos'
-
-  // 3. Remove a flag de primeiro acesso da tabela correta
-  const { error: rowErr } = await supabase
-    .from(table)
-    .update({ is_first_login: false })
-    .eq('id', entityId)
+  // 2. Remove a flag apenas do perfil pertencente a esta sessão. A função
+  // protegida evita que as regras de acesso silenciosamente atualizem zero linhas.
+  const { error: rowErr } = await supabase.rpc('complete_first_login_profile', {
+    p_role: role,
+    p_entity_id: entityId,
+  })
     
   if (rowErr) throw new Error(rowErr.message)
 }

@@ -3,6 +3,7 @@ import { useDataStore } from '../../../store/dataStore'
 import TemporaryAccessModal from './TemporaryAccessModal'
 import { formatCpf, isValidCpf } from '../../../lib/cpf'
 import { formatLocalDate, toLocalDate } from '../../../lib/date'
+import type { Professor } from '../../../types'
 
 interface Props { onClose: () => void }
 
@@ -13,8 +14,7 @@ const ESPECIALIDADES = ['Musculação', 'Funcional', 'Crossfit', 'Personal', 'Pi
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const MINUTOS = ['00', '15', '30', '45']
 
-// ── Seleção e formatação de horário ───────────────────────────────────
-
+// Seleção e formatação de horário
 function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [h, m] = value ? value.split(':') : ['', '']
   return (
@@ -48,18 +48,18 @@ function formatSalario(v: string) {
 }
 
 export default function GerenciarProfessores({ onClose }: Props) {
-  // ── Dados, filtros e modais ──────────────────────────────────────────
-
-  const { professores, addProfessor, updateProfessor } = useDataStore()
+  // Dados, filtros e modais
+  const { professores, addProfessor, updateProfessor, resetProfessorPassword } = useDataStore()
   const [filter, setFilter] = useState<FilterType>('todos')
   const [search, setSearch] = useState('')
   const [showCadastrar, setShowCadastrar] = useState(false)
   const [showEditar, setShowEditar] = useState(false)
   const [showFerias, setShowFerias] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [resetTargetId, setResetTargetId] = useState<string | null>(null)
+  const [resettingPassword, setResettingPassword] = useState(false)
 
-  // ── Campos do professor ────────────────────────────────────────────────
-
+  // Campos do professor
   const [nome, setNome] = useState('')
   const [cpf, setCpf] = useState('')
   const [telefone, setTelefone] = useState('')
@@ -73,7 +73,7 @@ export default function GerenciarProfessores({ onClose }: Props) {
   const [feriasFim, setFeriasFim] = useState('')
   const [savingFerias, setSavingFerias] = useState(false)
   const [formError, setFormError] = useState('')
-  const [credencialCriada, setCredencialCriada] = useState<{ nome: string; cpf: string; senha: string } | null>(null)
+  const [credencialCriada, setCredencialCriada] = useState<{ nome: string; cpf: string; senha: string; mode: 'created' | 'reset' } | null>(null)
 
   const horario = horarioInicio && horarioFim ? `${horarioInicio} - ${horarioFim}` : ''
 
@@ -90,8 +90,7 @@ export default function GerenciarProfessores({ onClose }: Props) {
   const ferias = professores.filter(p => p.status === 'ferias').length
   const folhaPendente = professores.filter(p => p.status === 'ativo').reduce((acc, p) => acc + p.salario, 0)
 
-  // ── Formatação e preparação do formulário ───────────────────────────────
-
+  // Formatação e preparação do formulário
   const formatTel = (v: string) => {
     const d = v.replace(/\D/g, '').slice(0, 11)
     return d.length <= 10
@@ -105,7 +104,7 @@ export default function GerenciarProfessores({ onClose }: Props) {
     setEspecialidade(''); setEspecialidadeSecundaria(''); setFormError('')
   }
 
-  const openEdit = (p: any) => {
+  const openEdit = (p: Professor) => {
     setEditingId(p.id)
     setNome(p.nome || '')
     setCpf(formatCpf(p.cpf || ''))
@@ -115,7 +114,7 @@ export default function GerenciarProfessores({ onClose }: Props) {
     setHorarioInicio(start || '')
     setHorarioFim(end || '')
     setSalario(p.salario ? p.salario.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '')
-    // try to split especialidade by ' / '
+    // Separa as duas especialidades para preencher os campos.
     const espParts = (p.especialidade || '').split(' / ')
     setEspecialidade(espParts[0] || '')
     setEspecialidadeSecundaria(espParts[1] || '')
@@ -125,9 +124,8 @@ export default function GerenciarProfessores({ onClose }: Props) {
     setShowEditar(true)
   }
 
-  // ── Cadastro, edição e status ───────────────────────────────────────
-
-const handleCadastrar = async (e: React.FormEvent) => {
+  // Cadastro, edição e status
+  const handleCadastrar = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
     
@@ -144,7 +142,6 @@ const handleCadastrar = async (e: React.FormEvent) => {
       : especialidade
 
     try {
-      // O 'await' obriga o front-end a esperar o Supabase responder
       const result = await addProfessor({
         nome: nome.trim(),
         cpf,
@@ -155,13 +152,11 @@ const handleCadastrar = async (e: React.FormEvent) => {
         especialidade: espStr,
         status: 'ativo',
       })
-      setCredencialCriada({ nome: result.record.nome, cpf: result.record.cpf, senha: result.temporaryPassword })
+      setCredencialCriada({ nome: result.record.nome, cpf: result.record.cpf, senha: result.temporaryPassword, mode: 'created' })
       
-      // Só fecha o modal se a gravação no banco for um sucesso absoluto
       setShowCadastrar(false)
       resetForm()
     } catch (err) {
-      // Se a função RPC ou a gravação falharem, o erro será exibido na tela
       setFormError(err instanceof Error ? err.message : 'Erro ao cadastrar professor.')
     }
   }
@@ -196,8 +191,8 @@ const handleCadastrar = async (e: React.FormEvent) => {
       setShowEditar(false)
       setEditingId(null)
       resetForm()
-    } catch (err: any) {
-      setFormError(err?.message || 'Erro ao salvar alterações.')
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Erro ao salvar alterações.')
     }
   }
 
@@ -213,8 +208,32 @@ const handleCadastrar = async (e: React.FormEvent) => {
       setShowEditar(false)
       setEditingId(null)
       resetForm()
-    } catch (err: any) {
-      setFormError(err?.message || 'Erro ao atualizar status.')
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Erro ao atualizar status.')
+    }
+  }
+
+  const handleRedefinirSenha = async () => {
+    const professor = professores.find(item => item.id === resetTargetId)
+    if (!professor) return
+    setFormError('')
+    setResettingPassword(true)
+    try {
+      const result = await resetProfessorPassword(professor.id)
+      setCredencialCriada({
+        nome: result.record.nome,
+        cpf: result.record.cpf,
+        senha: result.temporaryPassword,
+        mode: 'reset',
+      })
+      setResetTargetId(null)
+      setShowEditar(false)
+      setEditingId(null)
+      resetForm()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Não foi possível redefinir a senha do professor.')
+    } finally {
+      setResettingPassword(false)
     }
   }
 
@@ -264,6 +283,28 @@ const handleCadastrar = async (e: React.FormEvent) => {
   const espSecOptions = ESPECIALIDADES.filter(e => e !== especialidade)
 
   const editingProfessor = professores.find(professor => professor.id === editingId)
+  const resetTarget = professores.find(professor => professor.id === resetTargetId)
+
+  if (resetTarget) {
+    return (
+      <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-2xl border border-yellow-500/25 bg-[#111111] p-6 shadow-2xl">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-500/10 text-yellow-300">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M1 4v6h6" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /><path d="M12 7v5l3 2" /></svg>
+          </div>
+          <h3 className="text-lg font-bold text-white">Gerar nova senha temporária?</h3>
+          <p className="mt-2 text-sm leading-relaxed text-[#a1a1aa]">
+            A senha atual de <strong className="text-white">{resetTarget.nome}</strong> deixará de funcionar e as sessões abertas serão encerradas. No próximo acesso, será obrigatório criar uma senha nova.
+          </p>
+          {formError && <p className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">{formError}</p>}
+          <div className="mt-6 flex gap-2">
+            <button type="button" disabled={resettingPassword} onClick={() => { setResetTargetId(null); setFormError('') }} className="flex-1 rounded-xl bg-[#1a1a1a] py-3 text-sm text-white hover:bg-[#222] disabled:opacity-50">Cancelar</button>
+            <button type="button" disabled={resettingPassword} onClick={() => void handleRedefinirSenha()} className="flex-1 rounded-xl bg-yellow-400 py-3 text-sm font-bold text-black hover:bg-yellow-300 disabled:opacity-50">{resettingPassword ? 'Gerando...' : 'Gerar nova senha'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (showFerias && editingProfessor) {
     return (
@@ -325,8 +366,7 @@ const handleCadastrar = async (e: React.FormEvent) => {
     )
   }
 
-  // ── Formulário de edição ────────────────────────────────────────────
-
+  // Formulário de edição
   if (showEditar) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -434,6 +474,22 @@ const handleCadastrar = async (e: React.FormEvent) => {
               </div>
             )}
 
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Acesso do professor</p>
+                <p className="mt-0.5 text-xs text-[#71717a]">Gere uma senha temporária e exija a troca no próximo acesso.</p>
+              </div>
+              <button
+                type="button"
+                disabled={editingProfessor?.status === 'inativo'}
+                title={editingProfessor?.status === 'inativo' ? 'Reative o professor antes de redefinir a senha.' : undefined}
+                onClick={() => editingProfessor && setResetTargetId(editingProfessor.id)}
+                className="shrink-0 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs font-semibold text-yellow-300 transition-colors hover:bg-yellow-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Redefinir senha
+              </button>
+            </div>
+
             {formError && (
               <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{formError}</p>
             )}
@@ -460,8 +516,7 @@ const handleCadastrar = async (e: React.FormEvent) => {
     )
   }
 
-  // ── Formulário de cadastro ────────────────────────────────────────────
-
+  // Formulário de cadastro
   if (showCadastrar) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -586,8 +641,7 @@ const handleCadastrar = async (e: React.FormEvent) => {
     )
   }
 
-  // ── Lista de professores ─────────────────────────────────────────────
-
+  // Lista de professores
   return (
     <>
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -697,6 +751,7 @@ const handleCadastrar = async (e: React.FormEvent) => {
         cpf={credencialCriada.cpf}
         perfil="Professor"
         senha={credencialCriada.senha}
+        mode={credencialCriada.mode}
         onClose={() => setCredencialCriada(null)}
       />
     )}

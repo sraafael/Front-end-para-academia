@@ -4,8 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useDataStore } from './dataStore'
 import type { UserRole } from '../types'
 
-// ── Contrato do estado de autenticação ───────────────────────────────────
-
+// Contrato do estado de autenticação
 interface AuthState {
   role: UserRole | null
   currentAlunoId: string | null
@@ -27,8 +26,7 @@ interface AuthState {
   initialize: () => Promise<void>
 }
 
-// ── Estado sem sessão ativa ───────────────────────────────────────────
-
+// Estado sem sessão ativa
 const loggedOutState = {
   role: null,
   currentAlunoId: null,
@@ -41,8 +39,7 @@ const loggedOutState = {
   pendingFirstLogin: false,
 } as const
 
-// ── Store de autenticação ──────────────────────────────────────────────
-
+// Store de autenticação
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({

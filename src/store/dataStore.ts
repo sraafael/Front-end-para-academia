@@ -9,8 +9,7 @@ import type {
   AlunoStatus, PagamentoStatus, TreinoFicha, TreinoFichaInput, HistoricoPesoEntry, FrequenciaEntry,
 } from '../types'
 
-// ── DB row → frontend type mappers ───────────────────────────────────────────
-
+// DB row → frontend type mappers
 function mapPlano(r: Record<string, unknown>): Plano {
   return {
     id:          r.id as string,
@@ -138,8 +137,7 @@ function mapTransacao(r: Record<string, unknown>): Transacao {
   }
 }
 
-// ── Store ────────────────────────────────────────────────────────────────────
-
+// Store
 type CreateAlunoPayload = Omit<Aluno, 'id' | 'historicoPeso' | 'frequencia' | 'treinos' | 'sequencia' | 'metaSemanal' | 'conquistasDesbloqueadas' | 'pagamentoStatus' | 'isFirstLogin' | 'senha'>
 type CreatedAccount<T> = { record: T; temporaryPassword: string }
 
@@ -172,6 +170,7 @@ interface DataState {
 
   addProfessor: (data: Omit<Professor, 'id' | 'senha'>) => Promise<CreatedAccount<Professor>>
   updateProfessor: (id: string, data: Partial<Professor>) => Promise<void>
+  resetProfessorPassword: (id: string) => Promise<CreatedAccount<Professor>>
 
   addTurma: (data: Omit<Turma, 'id' | 'status'>) => Promise<void>
 
@@ -192,16 +191,14 @@ const emptyData = () => ({
   error: null,
 })
 
-// ── Controle de carregamentos concorrentes ───────────────────────────────────
-
+// Controle de carregamentos concorrentes
 let dataGeneration = 0
 const activeLoadControllers = new Set<AbortController>()
 let activeLoadAll: { generation: number; promise: Promise<void> } | null = null
 const activeAlunoLoads = new Map<string, { generation: number; promise: Promise<void> }>()
 const activeProfessorLoads = new Map<string, { generation: number; promise: Promise<void> }>()
 
-// ── Estado e operações de dados ────────────────────────────────────────
-
+// Estado e operações de dados
 export const useDataStore = create<DataState>()((set, get) => ({
   ...emptyData(),
 
@@ -217,7 +214,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     set(emptyData())
   },
 
-  // ── Load all data (admin / professor dashboards) ────────────────────────
+  // Dados dos painéis do administrador e do professor.
   loadAll: () => {
     if (activeLoadAll?.generation === dataGeneration) {
       return activeLoadAll.promise
@@ -292,7 +289,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     return promise
   },
 
-  // ── Load a single aluno with full related data (aluno dashboard) ─────────
+  // Perfil completo usado no painel do aluno.
   loadAluno: (alunoId) => {
     const activeLoad = activeAlunoLoads.get(alunoId)
     if (activeLoad?.generation === dataGeneration) return activeLoad.promise
@@ -307,12 +304,18 @@ export const useDataStore = create<DataState>()((set, get) => ({
       supabase.from('historico_peso').select('*').eq('aluno_id', alunoId).order('data').abortSignal(controller.signal),
       supabase.from('frequencia').select('*').eq('aluno_id', alunoId).order('data').abortSignal(controller.signal),
       supabase.from('treinos').select('*, exercicios(*, series_realizadas(*))').eq('aluno_id', alunoId).abortSignal(controller.signal),
+      supabase.from('planos').select('*').order('nome').abortSignal(controller.signal),
     ])
-      .then(([alunoRes, pesoRes, freqRes, treinosRes]) => {
+      .then(([alunoRes, pesoRes, freqRes, treinosRes, planosRes]) => {
         if (controller.signal.aborted || generation !== dataGeneration) return
         if (!alunoRes.data) {
           set({ loading: false, error: alunoRes.error?.message ?? 'Perfil de aluno não encontrado.' })
           return
+        }
+
+        const relatedError = pesoRes.error ?? freqRes.error ?? treinosRes.error ?? planosRes.error
+        if (relatedError) {
+          throw new Error(relatedError.message)
         }
 
         const historicoPeso: HistoricoPesoEntry[] = (pesoRes.data ?? []).map((p: Record<string, unknown>) => ({
@@ -332,6 +335,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
           alunos: s.alunos.some(a => a.id === alunoId)
             ? s.alunos.map(a => a.id === alunoId ? aluno : a)
             : [...s.alunos, aluno],
+          planos: (planosRes.data ?? []).map(row => mapPlano(row as Record<string, unknown>)),
         }))
       })
       .catch((error: unknown) => {
@@ -441,8 +445,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     return promise
   },
 
-  // ── Mutations ─────────────────────────────────────────────────────────────
-
+  // Mutations
   addAluno: async (data) => {
     const hoje = toLocalDate()
     if (!isValidCpf(data.cpf)) throw new Error('Informe um CPF válido.')
@@ -478,7 +481,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
       idade: data.idade,
       peso: data.peso,
       plano_id: data.planoId || null,
-      professor_id: (data as any).professorId || null,
+      professor_id: data.professorId || null,
       status: data.status,
       turma_id: data.turmaId ?? null,
       matricula_data: data.matriculaData || hoje,
@@ -508,7 +511,12 @@ export const useDataStore = create<DataState>()((set, get) => ({
     }))
     
     if (data.peso > 0) {
-      await supabase.from('historico_peso').insert({ aluno_id: novo.id, data: hoje, peso: data.peso })
+      const { error: pesoError } = await supabase.rpc('registrar_peso', {
+        p_aluno_id: novo.id,
+        p_peso: data.peso,
+        p_data: hoje,
+      })
+      if (pesoError) throw new Error(`Aluno criado, mas não foi possível registrar o peso inicial: ${pesoError.message}`)
     }
     return { record: novo, temporaryPassword }
   },
@@ -752,6 +760,27 @@ export const useDataStore = create<DataState>()((set, get) => ({
     const { error } = await supabase.from('professores').update(updates).eq('id', id)
     if (error) throw new Error(error.message)
     set(s => ({ professores: s.professores.map(p => p.id === id ? { ...p, ...data } : p) }))
+  },
+
+  resetProfessorPassword: async (id) => {
+    if (!id) throw new Error('Professor não encontrado.')
+    const temporaryPassword = generateTemporaryPassword()
+    const { error } = await supabase.rpc('reset_professor_password', {
+      p_professor_id: id,
+      p_temporary_password: temporaryPassword,
+    })
+    if (error) throw new Error(error.message)
+
+    const { data, error: loadError } = await supabase
+      .from('professores')
+      .select('*')
+      .eq('id', id)
+      .single()
+    if (loadError || !data) throw new Error(loadError?.message ?? 'Professor não encontrado.')
+
+    const professor = mapProfessor(data as Record<string, unknown>)
+    set(s => ({ professores: s.professores.map(item => item.id === id ? professor : item) }))
+    return { record: professor, temporaryPassword }
   },
 
   addTurma: async (data) => {

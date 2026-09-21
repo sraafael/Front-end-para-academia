@@ -3,8 +3,7 @@ import type { ComponentType } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router'
 import ProtectedRoute from '../components/shared/ProtectedRoute'
 
-// ── Páginas carregadas sob demanda ─────────────────────────────────────────
-
+// Páginas carregadas sob demanda
 const RoleSelect = lazy(() => import('../components/auth/RoleSelect'))
 const LoginScreen = lazy(() => import('../components/auth/LoginScreen'))
 const ForgotPassword = lazy(() => import('../components/auth/ForgotPassword'))
@@ -14,8 +13,7 @@ const OwnerDashboard = lazy(() => import('../components/owner/OwnerDashboard'))
 const ProfessorDashboard = lazy(() => import('../components/professor/ProfessorDashboard'))
 const AlunoDashboard = lazy(() => import('../components/aluno/AlunoDashboard'))
 
-// ── Estado de carregamento compartilhado ────────────────────────────────────
-
+// Estado de carregamento compartilhado
 function page(Component: ComponentType) {
   return (
     <Suspense fallback={(
@@ -28,8 +26,7 @@ function page(Component: ComponentType) {
   )
 }
 
-// ── Mapa de rotas ──────────────────────────────────────────────────────────
-
+// Mapa de rotas
 export const router = createBrowserRouter([
   // Rotas públicas de autenticação.
   { path: '/', element: <Navigate to="/login" replace /> },

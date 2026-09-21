@@ -1,5 +1,4 @@
-// ── Datas no fuso local ─────────────────────────────────────────────────────
-
+// Datas no fuso local
 export function toLocalDate(date = new Date()): string {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 10)

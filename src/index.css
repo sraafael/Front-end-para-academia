@@ -1,15 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import 'tailwindcss';
 
-/* ── Fontes do projeto ──────────────────────────────────────────────── */
-
+/* Fontes do projeto */
 @theme inline {
   --font-sans: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-/* ── Base global ───────────────────────────────────────────────────── */
-
+/* Base global */
 * {
   box-sizing: border-box;
 }
@@ -27,8 +25,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Barra de rolagem ────────────────────────────────────────────── */
-
+/* Barra de rolagem */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -47,15 +44,13 @@ body {
   background: #3a3a3a;
 }
 
-/* ── Normalização de campos numéricos ─────────────────────────────────── */
-
+/* Campos numéricos */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
 }
 
-/* ── Campos dos formulários administrativos ─────────────────────────── */
-
+/* Formulários administrativos */
 .field-dark {
   display: block;
   width: 100%;

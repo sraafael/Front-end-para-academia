@@ -5,8 +5,7 @@ import { formatCpf, isValidCpf, onlyCpfDigits } from '../../lib/cpf'
 import type { UserRole } from '../../types'
 
 export default function ForgotPassword() {
-  // ── Perfil que solicitou a recuperação ────────────────────────────────────
-
+  // Perfil que solicitou a recuperação
   const params = useParams()
   const validRoles: UserRole[] = ['admin', 'professor', 'aluno']
   const role: UserRole = validRoles.includes(params.role as UserRole) ? params.role as UserRole : 'admin'
@@ -56,8 +55,7 @@ export default function ForgotPassword() {
     }
   }
 
-  // ── Orientação de recuperação segura ────────────────────────────────────
-
+  // Orientação de recuperação segura
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col px-4 py-8">
       <button onClick={() => navigate(`/login/${role}`)}

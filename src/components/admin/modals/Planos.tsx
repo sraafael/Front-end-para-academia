@@ -3,8 +3,7 @@ import { useDataStore } from '../../../store/dataStore'
 
 interface Props { onClose: () => void }
 
-// ── Opções e utilitários do formulário ─────────────────────────────────
-
+// Opções e utilitários do formulário
 const MODALIDADES_OPCOES = ['Musculação', 'Funcional', 'Crossfit', 'Personal', 'Pilates', 'Natação', 'HIIT', 'Yoga', 'Hidroginástica']
 const BENEFICIOS_OPCOES = [
   'Acesso livre à musculação', 'Aulas coletivas inclusas', 'Armário',
@@ -33,8 +32,7 @@ function getPlanSaveError(error: unknown) {
 }
 
 export default function Planos({ onClose }: Props) {
-  // ── Dados e estado do formulário ──────────────────────────────────────
-
+  // Dados e estado do formulário
   const { planos, addPlano, updatePlano } = useDataStore()
   const [showCriar, setShowCriar] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
@@ -54,8 +52,7 @@ export default function Planos({ onClose }: Props) {
 
   const [saving, setSaving] = useState(false)
 
-  // ── Limpeza, edição e gravação ──────────────────────────────────────
-
+  // Limpeza, edição e gravação
   const limparFormulario = () => {
     setNome('')
     setPreco('')
@@ -107,8 +104,7 @@ export default function Planos({ onClose }: Props) {
 
   const nivelColor = (preco: number) => preco < 100 ? 'text-[#22c55e] bg-[#22c55e]/10' : preco < 200 ? 'text-blue-400 bg-blue-400/10' : 'text-yellow-400 bg-yellow-400/10'
 
-  // ── Formulário de criação e edição ───────────────────────────────────
-
+  // Formulário de criação e edição
   if (showCriar) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -254,8 +250,7 @@ export default function Planos({ onClose }: Props) {
     )
   }
 
-  // ── Lista de planos ───────────────────────────────────────────────────────
-
+  // Lista de planos
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">

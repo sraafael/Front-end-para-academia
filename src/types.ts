@@ -1,19 +1,6 @@
-// ── Perfis de acesso e navegação ────────────────────────────────────────
+// Perfis de acesso
 
 export type UserRole = 'owner' | 'admin' | 'professor' | 'aluno'
-
-export type View =
-  | 'roleSelect'
-  | 'loginOwner'
-  | 'loginAdmin'
-  | 'loginProfessor'
-  | 'loginAluno'
-  | 'forgotPassword'
-  | 'firstLoginReset'
-  | 'ownerDashboard'
-  | 'adminDashboard'
-  | 'professorDashboard'
-  | 'alunoDashboard'
 
 export type AlunoStatus = 'ativo' | 'atrasado' | 'inativo'
 export type ProfessorStatus = 'ativo' | 'ferias' | 'inativo'
@@ -21,8 +8,7 @@ export type TurmaStatus = 'concluida' | 'em_andamento' | 'proxima' | 'cancelada'
 export type TransacaoTipo = 'receita' | 'despesa'
 export type PagamentoStatus = 'pago' | 'pendente' | 'atrasado'
 
-// ── Fichas de treino ─────────────────────────────────────────────────────
-
+// Fichas de treino
 export interface SerieRealizada {
   serieNum: number
   cargaReal: number
@@ -62,8 +48,7 @@ export interface TreinoFichaInput {
   exercicios: ExercicioFichaInput[]
 }
 
-// ── Acompanhamento do aluno ────────────────────────────────────────────
-
+// Acompanhamento do aluno
 export interface HistoricoPesoEntry {
   data: string
   peso: number
@@ -74,8 +59,7 @@ export interface FrequenciaEntry {
   presente: boolean
 }
 
-// ── Entidades principais ────────────────────────────────────────────────
-
+// Entidades principais
 export interface Aluno {
   id: string
   nome: string
@@ -159,14 +143,4 @@ export interface Conquista {
   icon: string
   nivel: 'bronze' | 'prata' | 'ouro' | 'platina'
   criterio: string
-}
-
-// ── Estado agregado da aplicação ─────────────────────────────────────────
-
-export interface AppState {
-  alunos: Aluno[]
-  professores: Professor[]
-  turmas: Turma[]
-  planos: Plano[]
-  transacoes: Transacao[]
 }

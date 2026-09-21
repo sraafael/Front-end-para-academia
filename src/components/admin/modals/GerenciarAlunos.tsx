@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Aluno, Plano, Turma } from '../../../types'
+import type { Aluno, Plano, Professor, Turma } from '../../../types'
 import { useDataStore } from '../../../store/dataStore'
 import TemporaryAccessModal from './TemporaryAccessModal'
 import { formatLocalDate, toLocalDate } from '../../../lib/date'
@@ -10,17 +10,26 @@ interface Props { onClose: () => void }
 type FilterType = 'todos' | 'em_dia' | 'atrasados' | 'inativos'
 const PAGE_SIZE = 8
 
-// ── Perfil e edição de um aluno ──────────────────────────────────────
+function normalizeFormaPagamento(value: string) {
+  const normalized = value.trim().toLocaleLowerCase('pt-BR')
+  if (normalized === 'pix') return 'PIX'
+  if (normalized === 'pix / cartão' || normalized === 'pix / cartao') return 'PIX / Cartão'
+  if (normalized.includes('cartão') || normalized.includes('cartao')) return 'Cartão de Crédito'
+  if (normalized === 'boleto') return 'Boleto'
+  if (normalized === 'dinheiro') return 'Dinheiro'
+  return value
+}
 
+// Perfil e edição de um aluno
 function AlunoPerfilModal({
   aluno, planos, professores, turmas, onClose, onSave,
 }: {
   aluno: Aluno
   planos: Plano[]
-  professores: any[] 
+  professores: Professor[]
   turmas: Turma[]
   onClose: () => void
-  onSave: (data: Partial<Aluno>) => void
+  onSave: (data: Partial<Aluno>) => Promise<void>
 }) {
   const [editando, setEditando] = useState(false)
   const [nome, setNome] = useState(aluno.nome)
@@ -33,7 +42,9 @@ function AlunoPerfilModal({
   const [turmaId, setTurmaId] = useState(aluno.turmaId ?? '')
   const [status, setStatus] = useState(aluno.status)
   const [pagamentoStatus, setPagamentoStatus] = useState(aluno.pagamentoStatus)
-  const [formaPagamento, setFormaPagamento] = useState(aluno.formaPagamento)
+  const [formaPagamento, setFormaPagamento] = useState(normalizeFormaPagamento(aluno.formaPagamento))
+  const [salvando, setSalvando] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const plano = planos.find(p => p.id === aluno.planoId)
   const professor = professores.find(p => p.id === professorId)
@@ -41,21 +52,29 @@ function AlunoPerfilModal({
   const presencas = aluno.frequencia.filter(f => f.presente).length
   const totalFreq = aluno.frequencia.length
 
-  const handleSave = () => {
-    onSave({ 
-      nome,
-      telefone,
-      email, 
-      idade: parseInt(idade) || 0, 
-      peso: parseFloat(peso) || 0, 
-      planoId, 
-      professorId, 
-      turmaId,
-      status, 
-      pagamentoStatus, 
-      formaPagamento 
-    } as Partial<Aluno>)
-    setEditando(false)
+  const handleSave = async () => {
+    setSalvando(true)
+    setSaveError('')
+    try {
+      await onSave({
+        nome,
+        telefone,
+        email,
+        idade: parseInt(idade) || 0,
+        peso: parseFloat(peso) || 0,
+        planoId,
+        professorId,
+        turmaId,
+        status,
+        pagamentoStatus,
+        formaPagamento,
+      } as Partial<Aluno>)
+      setEditando(false)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Não foi possível salvar as alterações.')
+    } finally {
+      setSalvando(false)
+    }
   }
 
   const statusCor = {
@@ -185,7 +204,7 @@ function AlunoPerfilModal({
                   { label: 'Idade', value: aluno.idade ? `${aluno.idade} anos` : '—' },
                   { label: 'Peso', value: aluno.peso ? `${aluno.peso} kg` : '—' },
                   { label: 'Matrícula', value: formatLocalDate(aluno.matriculaData) },
-                  { label: 'Forma Pgto.', value: aluno.formaPagamento || '—' },
+                  { label: 'Forma Pgto.', value: normalizeFormaPagamento(aluno.formaPagamento) || '—' },
                 ].map(f => (
                   <div key={f.label}>
                     <p className="text-[#52525b] text-xs">{f.label}</p>
@@ -286,7 +305,7 @@ function AlunoPerfilModal({
                 </div>
                 <div>
                   <p className="text-[#52525b] text-xs">Forma de pagamento</p>
-                  <p className="text-white mt-0.5">{aluno.formaPagamento || '—'}</p>
+                  <p className="text-white mt-0.5">{normalizeFormaPagamento(aluno.formaPagamento) || '—'}</p>
                 </div>
                 <div>
                   <p className="text-[#52525b] text-xs">Turma</p>
@@ -322,15 +341,18 @@ function AlunoPerfilModal({
 
         {/* Footer */}
         {editando ? (
-          <div className="flex gap-2 p-5 border-t border-[#1f1f1f]">
-            <button onClick={() => setEditando(false)}
-              className="flex-1 bg-[#1a1a1a] hover:bg-[#222] text-white rounded-xl py-2.5 text-sm transition-colors">
-              Cancelar
-            </button>
-            <button onClick={handleSave}
-              className="flex-1 bg-[#22c55e] hover:bg-[#16a34a] text-black font-semibold rounded-xl py-2.5 text-sm transition-colors">
-              Salvar alterações
-            </button>
+          <div className="p-5 border-t border-[#1f1f1f]">
+            {saveError && <p className="text-red-300 text-xs mb-3">{saveError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setEditando(false); setSaveError('') }} disabled={salvando}
+                className="flex-1 bg-[#1a1a1a] hover:bg-[#222] text-white rounded-xl py-2.5 text-sm transition-colors">
+                Cancelar
+              </button>
+              <button onClick={handleSave} disabled={salvando}
+                className="flex-1 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-60 text-black font-semibold rounded-xl py-2.5 text-sm transition-colors">
+                {salvando ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="px-5 pb-5 pt-2 border-t border-[#1f1f1f]">
@@ -346,8 +368,7 @@ function AlunoPerfilModal({
 }
 
 export default function GerenciarAlunos({ onClose }: Props) {
-  // ── Dados, filtros e modais ──────────────────────────────────────────
-
+  // Dados, filtros e modais
   const { alunos, planos, professores, turmas, addAluno, updateAluno } = useDataStore()
   const [filter, setFilter] = useState<FilterType>('todos')
   const [search, setSearch] = useState('')
@@ -355,8 +376,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
   const [showCadastrar, setShowCadastrar] = useState(false)
   const [alunoSelecionado, setAlunoSelecionado] = useState<Aluno | null>(null)
 
-  // ── Campos do novo aluno ────────────────────────────────────────────────
-
+  // Campos do novo aluno
   const [nome, setNome] = useState('')
   const [cpf, setCpf] = useState('')
   const [telefone, setTelefone] = useState('')
@@ -369,8 +389,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
   const [formError, setFormError] = useState('')
   const [credencialCriada, setCredencialCriada] = useState<{ nome: string; cpf: string; senha: string } | null>(null)
 
-  // ── Indicadores, busca e paginação ─────────────────────────────────────
-
+  // Indicadores, busca e paginação
   const ativos = alunos.filter(a => a.status === 'ativo').length
   const emAtraso = alunos.filter(a => a.pagamentoStatus === 'atrasado' || a.status === 'atrasado').length
   const semTurma = alunos.filter(a => !a.turmaId).length
@@ -399,8 +418,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
     return parts.length > 2 ? parts[0] + ',' + parts[1] : clean
   }
 
-  // ── Cadastro e credencial de primeiro acesso ────────────────────────────────
-
+  // Cadastro e credencial de primeiro acesso
   const handleCadastrar = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
@@ -427,7 +445,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
         turmaId,
         matriculaData: toLocalDate(),
         status: 'ativo',
-        formaPagamento: 'pix',
+        formaPagamento: 'PIX',
       })
       setCredencialCriada({ nome: result.record.nome, cpf: result.record.cpf, senha: result.temporaryPassword })
       
@@ -458,6 +476,8 @@ export default function GerenciarAlunos({ onClose }: Props) {
       return <span className="text-xs bg-red-500/15 text-red-400 px-2.5 py-1 rounded-full">Atrasado</span>
     if (a.status === 'inativo')
       return <span className="text-xs bg-zinc-700/30 text-zinc-400 px-2.5 py-1 rounded-full">Inativo</span>
+    if (a.pagamentoStatus === 'pendente')
+      return <span className="text-xs bg-yellow-500/15 text-yellow-400 px-2.5 py-1 rounded-full">Pendente</span>
     return <span className="text-xs bg-[#22c55e]/15 text-[#22c55e] px-2.5 py-1 rounded-full">Em dia</span>
   }
 
@@ -468,8 +488,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
     { key: 'inativos', label: 'Inativos', count: alunos.filter(a => a.status === 'inativo').length },
   ]
 
-  // ── Formulário de cadastro ────────────────────────────────────────────
-
+  // Formulário de cadastro
   if (showCadastrar) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -587,8 +606,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
     )
   }
 
-  // ── Lista de alunos ───────────────────────────────────────────────────────
-
+  // Lista de alunos
   return (
     <>
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
