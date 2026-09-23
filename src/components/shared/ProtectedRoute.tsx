@@ -8,7 +8,15 @@ interface Props {
 
 // Proteção de acesso por perfil
 export default function ProtectedRoute({ role }: Props) {
-  const { isAuthenticated, role: userRole, pendingFirstLogin } = useAuthStore()
+  const { isAuthenticated, role: userRole, pendingFirstLogin, hydrating } = useAuthStore()
+
+  if (hydrating) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center" role="status" aria-label="Verificando acesso">
+        <div className="w-8 h-8 rounded-full border-2 border-[#27272a] border-t-[#22c55e] animate-spin" />
+      </div>
+    )
+  }
 
   if (!isAuthenticated || !userRole) {
     return <Navigate to="/login" replace />

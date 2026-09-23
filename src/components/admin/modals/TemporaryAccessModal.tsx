@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useModalKeyboard } from '../../../hooks/useModalKeyboard'
 
 // Dados da credencial temporária
 interface Props {
@@ -11,19 +12,27 @@ interface Props {
 }
 
 export default function TemporaryAccessModal({ nome, cpf, perfil, senha, mode = 'created', onClose }: Props) {
+  useModalKeyboard(onClose)
+
   // Cópia segura da mensagem de primeiro acesso
   const [copiado, setCopiado] = useState(false)
+  const [copyError, setCopyError] = useState('')
   const cpfLimpo = cpf.replace(/\D/g, '')
   const accessMoment = mode === 'reset' ? 'acesso após redefinição' : 'primeiro acesso'
   const texto = `FitPro — ${accessMoment}\nPerfil: ${perfil}\nCPF: ${cpfLimpo}\nSenha temporária: ${senha}\nA senha deverá ser trocada no próximo acesso.`
 
   const copiar = async () => {
-    await navigator.clipboard.writeText(texto)
-    setCopiado(true)
+    setCopyError('')
+    try {
+      await navigator.clipboard.writeText(texto)
+      setCopiado(true)
+    } catch {
+      setCopyError('Não foi possível copiar automaticamente. Anote os dados exibidos acima.')
+    }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Acesso temporário">
       <div className="bg-[#111111] border border-[#22c55e]/30 rounded-2xl w-full max-w-md p-6">
         <div className="w-12 h-12 rounded-xl bg-[#22c55e]/10 text-[#22c55e] flex items-center justify-center mb-4">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 12 4 4L19 6" /></svg>
@@ -52,7 +61,9 @@ export default function TemporaryAccessModal({ nome, cpf, perfil, senha, mode = 
 
         <p className="text-yellow-300/80 text-xs mt-4">Por segurança, não armazene esta senha no cadastro. O sistema exigirá a troca no próximo acesso.</p>
 
-        <div className="flex gap-2 mt-5">
+        <p className="text-red-400 text-xs mt-3 min-h-4" aria-live="polite">{copyError}</p>
+
+        <div className="flex gap-2 mt-2">
           <button onClick={copiar} className="flex-1 bg-[#1a1a1a] hover:bg-[#222] text-white text-sm rounded-xl py-3">
             {copiado ? 'Copiado!' : 'Copiar acesso'}
           </button>

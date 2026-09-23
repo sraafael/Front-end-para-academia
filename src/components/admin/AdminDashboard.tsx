@@ -8,10 +8,14 @@ import Financeiro from './modals/Financeiro'
 import AgendaAdmin from './modals/AgendaAdmin'
 import Relatorios from './modals/Relatorios'
 import Planos from './modals/Planos'
+import PixSettingsModal from './modals/PixSettings'
+import RecoveryRequests from './modals/RecoveryRequests'
+import { studentRecoveryApi } from '../../api/recovery'
 import { formatLocalDate, subtractLocalDays, toLocalDate } from '../../lib/date'
+import { isClassScheduledOnDate, isDateInCurrentMonth } from '../../lib/metrics'
 
 // Tipos e funções auxiliares
-type ModalType = 'alunos' | 'professores' | 'financeiro' | 'agenda' | 'relatorios' | 'planos' | null
+type ModalType = 'alunos' | 'professores' | 'financeiro' | 'agenda' | 'relatorios' | 'planos' | 'pix' | 'recovery' | null
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -26,8 +30,34 @@ export default function AdminDashboard() {
   const { alunos, professores, turmas, transacoes, loadAll, loading, error } = useDataStore()
 
   const [modal, setModal] = useState<ModalType>(null)
+  const [pixResult, setPixResult] = useState<'conectado' | 'erro' | null>(null)
+  const [recoveryCount, setRecoveryCount] = useState(0)
 
   useEffect(() => { loadAll() }, [loadAll])
+
+  useEffect(() => {
+    let active = true
+    const refresh = () => {
+      void studentRecoveryApi.pending()
+        .then(items => { if (active) setRecoveryCount(items.length) })
+        .catch(() => { /* O restante do painel continua disponível. */ })
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 60_000)
+    window.addEventListener('focus', refresh)
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [])
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const result = url.searchParams.get('pix')
+    if (result === 'conectado' || result === 'erro') {
+      setPixResult(result)
+      setModal('pix')
+      url.searchParams.delete('pix')
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+    }
+  }, [])
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -43,13 +73,19 @@ export default function AdminDashboard() {
   }
 
   // Indicadores calculados
-  const alunosAtivos = alunos.filter(a => a.status === 'ativo').length
-  const emAtraso = alunos.filter(a => a.pagamentoStatus === 'atrasado' || a.status === 'atrasado').length
+  const alunosAtivos = alunos.filter(a => a.status !== 'inativo').length
+  const alunosEmAtraso = alunos.filter(a => a.pagamentoStatus === 'atrasado' || a.status === 'atrasado')
+  const emAtraso = alunosEmAtraso.length
   const professoresAtivos = professores.filter(p => p.status === 'ativo').length
   const emFerias = professores.filter(p => p.status === 'ferias').length
-  const receita = transacoes.filter(t => t.tipo === 'receita' && t.status === 'pago').reduce((s, t) => s + t.valor, 0)
-  const pagamentos = transacoes.filter(t => t.tipo === 'receita' && t.status === 'pago').length
-  const turmasHoje = turmas.length
+  const pagamentosDoMes = transacoes.filter(t => (
+    t.tipo === 'receita'
+    && t.status === 'pago'
+    && isDateInCurrentMonth(t.data)
+  ))
+  const receita = pagamentosDoMes.reduce((s, t) => s + t.valor, 0)
+  const pagamentos = pagamentosDoMes.length
+  const turmasHoje = turmas.filter(turma => isClassScheduledOnDate(turma)).length
   const totalVagas = turmas.reduce((s, t) => s + t.capacidade, 0)
   const ocupadas = turmas.reduce((s, t) => s + t.alunoIds.length, 0)
   const ocupacaoPct = totalVagas > 0 ? Math.round((ocupadas / totalVagas) * 100) : 0
@@ -61,7 +97,7 @@ export default function AdminDashboard() {
     if (a.matriculaData > dataMinimaParaAlerta) return false
     const freq = a.frequencia.filter(f => f.data >= inicioJanelaFrequencia && f.data <= hoje)
     const presentes = freq.filter(f => f.presente).length
-    return a.status === 'ativo' && presentes < 3
+    return a.status !== 'inativo' && presentes < 3
   })
 
   const atividades = [
@@ -74,8 +110,10 @@ export default function AdminDashboard() {
   // Atalhos do painel
   const QUICK_LINKS = [
     { label: 'Gerenciar Alunos', modal: 'alunos' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg> },
+    { label: 'Pedidos de Senha', modal: 'recovery' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg> },
     { label: 'Gerenciar Professores', modal: 'professores' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" /></svg> },
     { label: 'Financeiro', modal: 'financeiro' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" /></svg> },
+    { label: 'Pix da Academia', modal: 'pix' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6h5l2 2 2-2h3v3l-2 2 2 2v5h-3l-2-2-2 2H6v-3l2-2-2-2V6z" /></svg> },
     { label: 'Agenda', modal: 'agenda' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg> },
     { label: 'Relatórios', modal: 'relatorios' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6" /></svg> },
     { label: 'Planos da Academia', modal: 'planos' as ModalType, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><circle cx="7" cy="7" r="1" /></svg> },
@@ -137,6 +175,14 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {recoveryCount > 0 && (
+          <button type="button" onClick={() => setModal('recovery')}
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-left text-sm text-yellow-100 hover:bg-yellow-500/15">
+            <span>{recoveryCount} {recoveryCount === 1 ? 'aluno solicitou' : 'alunos solicitaram'} redefinição de senha</span>
+            <span className="font-semibold">Ver pedidos →</span>
+          </button>
+        )}
+
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
@@ -164,7 +210,7 @@ export default function AdminDashboard() {
           {[
             { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>, label: 'Alunos Ativos', value: alunosAtivos, sub: `${emAtraso} em atraso`, subColor: emAtraso > 0 ? 'text-red-400' : 'text-[#22c55e]', iconBg: 'bg-[#1a3a1a] text-[#22c55e]' },
             { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6.5 6.5a6 6 0 0 0 0 11M17.5 6.5a6 6 0 0 1 0 11M3 12h18M12 3v18" /></svg>, label: 'Professores Ativos', value: professoresAtivos, sub: `${emFerias} em férias`, subColor: 'text-[#71717a]', iconBg: 'bg-[#1a3a1a] text-[#22c55e]' },
-            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" /></svg>, label: 'Receita Confirmada', value: fmtReal(receita), sub: `${pagamentos} pagamento(s)`, subColor: 'text-[#22c55e]', iconBg: 'bg-[#1a3a1a] text-[#22c55e]', large: true },
+            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" /></svg>, label: 'Receita do Mês', value: fmtReal(receita), sub: `${pagamentos} pagamento(s)`, subColor: 'text-[#22c55e]', iconBg: 'bg-[#1a3a1a] text-[#22c55e]', large: true },
             { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>, label: 'Turmas Hoje', value: turmasHoje, sub: `${ocupacaoPct}% ocupação`, subColor: 'text-[#22c55e]', iconBg: 'bg-[#1a3a1a] text-[#22c55e]' },
           ].map((s, i) => (
             <div key={i} className="bg-[#111111] border border-[#1f1f1f] rounded-2xl p-4 flex items-start gap-3">
@@ -195,7 +241,7 @@ export default function AdminDashboard() {
             <p className="text-[#52525b] text-sm py-4">Nenhum alerta no momento.</p>
           ) : (
             <div className="space-y-2">
-              {alunos.filter(a => a.pagamentoStatus === 'atrasado').map(a => (
+              {alunosEmAtraso.map(a => (
                 <div key={a.id} className="flex items-center gap-3 bg-red-500/5 border border-red-500/20 rounded-xl px-4 py-3">
                   <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
                   <p className="text-white text-sm flex-1">{a.nome}</p>
@@ -244,6 +290,7 @@ export default function AdminDashboard() {
                   className="w-full flex items-center gap-3 bg-[#0f0f0f] border border-[#1f1f1f] hover:bg-[#161616] hover:border-[#22c55e]/30 rounded-xl px-4 py-3 transition-all group text-left">
                   <span className="text-[#22c55e]">{l.icon}</span>
                   <p className="text-white text-sm flex-1">{l.label}</p>
+                  {l.modal === 'recovery' && recoveryCount > 0 && <span className="rounded-full bg-yellow-500 px-2 py-0.5 text-xs font-bold text-black">{recoveryCount}</span>}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="2" className="group-hover:stroke-[#22c55e] transition-colors">
                     <path d="M9 18l6-6-6-6" />
                   </svg>
@@ -260,6 +307,8 @@ export default function AdminDashboard() {
       {modal === 'agenda' && <AgendaAdmin onClose={() => setModal(null)} />}
       {modal === 'relatorios' && <Relatorios onClose={() => setModal(null)} />}
       {modal === 'planos' && <Planos onClose={() => setModal(null)} />}
+      {modal === 'pix' && <PixSettingsModal connectionResult={pixResult} onClose={() => { setPixResult(null); setModal(null) }} />}
+      {modal === 'recovery' && <RecoveryRequests onClose={() => setModal(null)} onPendingChange={setRecoveryCount} />}
     </div>
   )
 }

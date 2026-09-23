@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { Turma } from '../../../types'
+import { useModalKeyboard } from '../../../hooks/useModalKeyboard'
 import { useDataStore } from '../../../store/dataStore'
 import { toLocalDate } from '../../../lib/date'
+import { getClassStatusToday, isClassScheduledOnDate } from '../../../lib/metrics'
 
 interface Props { onClose: () => void }
 
@@ -25,9 +27,22 @@ export default function AgendaAdmin({ onClose }: Props) {
   const [modalidade, setModalidade] = useState('')
   const [horario, setHorario] = useState('')
   const [diasSelecionados, setDiasSelecionados] = useState<string[]>([])
+  const [duracaoMinutos, setDuracaoMinutos] = useState('60')
   const [capacidade, setCapacidade] = useState('')
   const [professorId, setProfessorId] = useState('')
   const [sala, setSala] = useState('')
+
+  useModalKeyboard(() => {
+    if (chamadaTurma) {
+      setChamadaTurma(null)
+      return
+    }
+    if (showNovaTurma) {
+      setShowNovaTurma(false)
+      return
+    }
+    onClose()
+  })
 
   const toggleDia = (d: string) => setDiasSelecionados(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
 
@@ -41,9 +56,19 @@ export default function AgendaAdmin({ onClose }: Props) {
     }
     setSaving(true)
     try {
-      await addTurma({ nome, modalidade, horario, diasSemana: diasSelecionados, capacidade: parseInt(capacidade) || 20, professorId, sala, alunoIds: [] })
+      await addTurma({
+        nome,
+        modalidade,
+        horario,
+        diasSemana: diasSelecionados,
+        duracaoMinutos: Math.max(15, parseInt(duracaoMinutos) || 60),
+        capacidade: parseInt(capacidade) || 20,
+        professorId,
+        sala,
+        alunoIds: [],
+      })
       setShowNovaTurma(false)
-      setNome(''); setModalidade(''); setHorario(''); setDiasSelecionados([]); setCapacidade(''); setProfessorId(''); setSala('')
+      setNome(''); setModalidade(''); setHorario(''); setDiasSelecionados([]); setDuracaoMinutos('60'); setCapacidade(''); setProfessorId(''); setSala('')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Não foi possível criar a turma.')
     } finally {
@@ -85,13 +110,15 @@ export default function AgendaAdmin({ onClose }: Props) {
     cancelada: { label: 'Cancelada', cls: 'bg-red-500/15 text-red-400' },
   }
 
-  const sorted = [...turmas].sort((a, b) => a.horario.localeCompare(b.horario))
+  const sorted = turmas
+    .filter(turma => isClassScheduledOnDate(turma))
+    .sort((a, b) => a.horario.localeCompare(b.horario))
 
   // Interface principal
   if (chamadaTurma) {
     const alunosDaTurma = alunos.filter(a => chamadaTurma.alunoIds.includes(a.id))
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Lista de chamada">
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-md">
           <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
             <div>
@@ -99,7 +126,7 @@ export default function AgendaAdmin({ onClose }: Props) {
               <h2 className="font-bold text-white font-mono">Lista de Chamada</h2>
               <p className="text-[#71717a] text-xs">Horário: {chamadaTurma.horario} · {chamadaTurma.alunoIds.length} alunos</p>
             </div>
-            <button onClick={() => setChamadaTurma(null)} className="text-[#52525b] hover:text-white">
+            <button onClick={() => setChamadaTurma(null)} aria-label="Fechar chamada" className="text-[#52525b] hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
@@ -160,14 +187,14 @@ export default function AgendaAdmin({ onClose }: Props) {
 
   if (showNovaTurma) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Criar turma">
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-md max-h-[90vh] overflow-auto">
           <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
             <div>
               <h2 className="font-bold text-white font-mono">Criar Nova Turma</h2>
               <p className="text-[#71717a] text-xs mt-0.5">Configure os detalhes da turma</p>
             </div>
-            <button onClick={() => setShowNovaTurma(false)} className="text-[#52525b] hover:text-white">
+            <button onClick={() => setShowNovaTurma(false)} aria-label="Fechar cadastro de turma" className="text-[#52525b] hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
@@ -191,6 +218,17 @@ export default function AgendaAdmin({ onClose }: Props) {
                 <input type="time" value={horario} onChange={e => setHorario(e.target.value)}
                   className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e]" />
               </div>
+            </div>
+            <div>
+              <label className="block text-[#a1a1aa] text-xs mb-1">Duração da aula</label>
+              <select value={duracaoMinutos} onChange={e => setDuracaoMinutos(e.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e]">
+                <option value="30">30 minutos</option>
+                <option value="45">45 minutos</option>
+                <option value="60">1 hora</option>
+                <option value="90">1 hora e 30 minutos</option>
+                <option value="120">2 horas</option>
+              </select>
             </div>
             <div>
               <label className="block text-[#a1a1aa] text-xs mb-2">Dias da semana</label>
@@ -241,14 +279,14 @@ export default function AgendaAdmin({ onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Agenda da academia">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
           <div>
             <h2 className="font-bold text-white font-mono text-lg">Agenda de Hoje</h2>
-            <p className="text-[#71717a] text-xs mt-0.5">{turmas.length} atividade(s) programada(s)</p>
+            <p className="text-[#71717a] text-xs mt-0.5">{sorted.length} atividade(s) programada(s)</p>
           </div>
-          <button onClick={onClose} className="text-[#52525b] hover:text-white">
+          <button onClick={onClose} aria-label="Fechar agenda" className="text-[#52525b] hover:text-white">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
@@ -258,19 +296,15 @@ export default function AgendaAdmin({ onClose }: Props) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
             Criar Nova Turma
           </button>
-          <button className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#222] border border-[#2a2a2a] text-white text-sm px-5 py-2.5 rounded-xl transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M15 9H9M15 15H9" /></svg>
-            Cancelar Aula
-          </button>
         </div>
 
         <div className="flex-1 overflow-auto p-5 space-y-2">
           {sorted.length === 0 ? (
-            <p className="text-[#52525b] text-sm text-center py-12">Nenhuma turma cadastrada.</p>
+            <p className="text-[#52525b] text-sm text-center py-12">Nenhuma turma programada para hoje.</p>
           ) : (
             sorted.map(t => {
               const prof = professores.find(p => p.id === t.professorId)
-              const cfg = statusConfig[t.status]
+              const cfg = statusConfig[getClassStatusToday(t)]
               return (
                 <button
                   key={t.id}
@@ -280,7 +314,7 @@ export default function AgendaAdmin({ onClose }: Props) {
                   <span className="text-[#71717a] font-mono text-sm w-12 flex-shrink-0">{t.horario}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium">{t.nome}</p>
-                    <p className="text-[#52525b] text-xs">{t.alunoIds.length} aluno(s) · {prof?.nome ?? '—'} · {t.sala}</p>
+                    <p className="text-[#52525b] text-xs">{t.alunoIds.length} aluno(s) · {t.duracaoMinutos} min · {prof?.nome ?? '—'} · {t.sala}</p>
                   </div>
                   <span className={`text-xs px-2.5 py-1 rounded-full ${cfg.cls} flex-shrink-0`}>{cfg.label}</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="2" className="group-hover:stroke-white transition-colors flex-shrink-0">

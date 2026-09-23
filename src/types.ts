@@ -107,6 +107,7 @@ export interface Turma {
   modalidade: string
   horario: string
   diasSemana: string[]
+  duracaoMinutos: number
   capacidade: number
   professorId: string
   sala: string

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useModalKeyboard } from '../../../hooks/useModalKeyboard'
 import { useDataStore } from '../../../store/dataStore'
 
 interface Props { onClose: () => void }
@@ -43,6 +44,8 @@ export default function Planos({ onClose }: Props) {
   const [beneficios, setBeneficios] = useState<string[]>([])
   const [beneficioCustom, setBeneficioCustom] = useState('')
   const [formError, setFormError] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [statusSavingId, setStatusSavingId] = useState<string | null>(null)
 
   const toggleMod = (m: string) => setModalidades(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
   const toggleBen = (b: string) => setBeneficios(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b])
@@ -63,6 +66,17 @@ export default function Planos({ onClose }: Props) {
     setFormError('')
     setEditandoId(null)
   }
+
+  const fecharModal = () => {
+    if (showCriar) {
+      setShowCriar(false)
+      limparFormulario()
+      return
+    }
+    onClose()
+  }
+
+  useModalKeyboard(fecharModal)
 
   const abrirEdicao = (id: string) => {
     const plano = planos.find(item => item.id === id)
@@ -99,6 +113,19 @@ export default function Planos({ onClose }: Props) {
     }
   }
 
+  const handleStatus = async (id: string, ativo: boolean) => {
+    setActionError('')
+    setStatusSavingId(id)
+    try {
+      await updatePlano(id, { ativo })
+    } catch (err) {
+      const acao = ativo ? 'ativar' : 'desativar'
+      setActionError(err instanceof Error ? `Não foi possível ${acao} o plano: ${err.message}` : `Não foi possível ${acao} o plano.`)
+    } finally {
+      setStatusSavingId(null)
+    }
+  }
+
   const ativos = planos.filter(p => p.ativo)
   const inativos = planos.filter(p => !p.ativo)
 
@@ -107,14 +134,14 @@ export default function Planos({ onClose }: Props) {
   // Formulário de criação e edição
   if (showCriar) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="plan-form-title">
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
           <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
             <div>
-              <h2 className="font-bold text-white font-mono">{editandoId ? 'Editar Plano' : 'Criar Novo Plano'}</h2>
+              <h2 id="plan-form-title" className="font-bold text-white font-mono">{editandoId ? 'Editar Plano' : 'Criar Novo Plano'}</h2>
               <p className="text-[#71717a] text-xs">{editandoId ? 'Atualize preço, duração e benefícios' : 'Monte o plano com modalidades e benefícios'}</p>
             </div>
-            <button onClick={() => { setShowCriar(false); limparFormulario() }} className="text-[#52525b] hover:text-white">
+            <button onClick={() => { setShowCriar(false); limparFormulario() }} aria-label="Fechar formulário do plano" className="text-[#52525b] hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
@@ -252,14 +279,14 @@ export default function Planos({ onClose }: Props) {
 
   // Lista de planos
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="plans-title">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
           <div>
-            <h2 className="font-bold text-white font-mono text-lg">Planos da Academia</h2>
+            <h2 id="plans-title" className="font-bold text-white font-mono text-lg">Planos da Academia</h2>
             <p className="text-[#71717a] text-xs mt-0.5">Gerencie os planos e preços oferecidos</p>
           </div>
-          <button onClick={onClose} className="text-[#52525b] hover:text-white">
+          <button onClick={onClose} aria-label="Fechar planos" className="text-[#52525b] hover:text-white">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
@@ -270,6 +297,10 @@ export default function Planos({ onClose }: Props) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
             Criar Novo Plano
           </button>
+
+          {actionError && (
+            <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2" role="alert">{actionError}</p>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -300,7 +331,13 @@ export default function Planos({ onClose }: Props) {
                     </div>
                     <div className="flex gap-2 mt-3 pt-3 border-t border-[#1a1a1a]">
                       <button onClick={() => abrirEdicao(p.id)} className="text-xs text-blue-400 hover:text-blue-300">Editar</button>
-                      <button onClick={() => updatePlano(p.id, { ativo: false })} className="text-xs text-[#71717a] hover:text-white">Desativar</button>
+                      <button
+                        onClick={() => void handleStatus(p.id, false)}
+                        disabled={statusSavingId === p.id}
+                        className="text-xs text-[#71717a] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {statusSavingId === p.id ? 'Salvando...' : 'Desativar'}
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -321,12 +358,18 @@ export default function Planos({ onClose }: Props) {
               <div className="space-y-2">
                 {inativos.map(p => (
                   <div key={p.id} className="bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-[#a1a1aa] text-sm">{p.nome}</span>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-end gap-3">
                         <p className="text-[#71717a] font-mono text-sm">R$ {p.preco.toFixed(2).replace('.', ',')}</p>
                         <button onClick={() => abrirEdicao(p.id)} className="text-xs text-blue-400 hover:text-blue-300">Editar</button>
-                        <button onClick={() => updatePlano(p.id, { ativo: true })} className="text-xs text-[#22c55e] hover:text-[#16a34a]">Ativar</button>
+                        <button
+                          onClick={() => void handleStatus(p.id, true)}
+                          disabled={statusSavingId === p.id}
+                          className="text-xs text-[#22c55e] hover:text-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {statusSavingId === p.id ? 'Salvando...' : 'Ativar'}
+                        </button>
                       </div>
                     </div>
                   </div>

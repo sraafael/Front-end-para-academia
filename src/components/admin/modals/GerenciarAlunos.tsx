@@ -118,7 +118,7 @@ function AlunoPerfilModal({
                 Editar
               </button>
             )}
-            <button onClick={onClose} className="text-[#52525b] hover:text-white transition-colors">
+            <button onClick={onClose} aria-label="Fechar aluno" className="text-[#52525b] hover:text-white transition-colors">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6 6 18M6 6l12 12" />
               </svg>
@@ -148,7 +148,7 @@ function AlunoPerfilModal({
           </div>
 
           {/* Métricas rápidas */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {[
               { label: 'Sequência', value: `${aluno.sequencia} dias`, color: 'text-red-400' },
               { label: 'Frequência', value: totalFreq > 0 ? `${Math.round((presencas / totalFreq) * 100)}%` : '—', color: 'text-[#22c55e]' },
@@ -616,7 +616,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
               <h2 className="font-bold text-white font-mono text-lg">Gerenciar Alunos</h2>
               <p className="text-[#71717a] text-xs mt-0.5">{alunos.length} aluno(s) · {emAtraso} atrasado(s)</p>
             </div>
-            <button onClick={onClose} className="text-[#52525b] hover:text-white transition-colors">
+            <button onClick={onClose} aria-label="Fechar alunos" className="text-[#52525b] hover:text-white transition-colors">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>

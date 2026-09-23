@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router'
 import { router } from './app/routes'
 import { useAuthStore } from './store/authStore'
 import { supabase } from './lib/supabase'
+import AppErrorBoundary from './components/shared/AppErrorBoundary'
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -20,5 +21,9 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [initialize, clearSession])
 
-  return <RouterProvider router={router} />
+  return (
+    <AppErrorBoundary>
+      <RouterProvider router={router} />
+    </AppErrorBoundary>
+  )
 }

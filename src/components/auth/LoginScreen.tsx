@@ -152,6 +152,7 @@ export default function LoginScreen() {
               <button
                 type="button"
                 onClick={() => setShowSenha(!showSenha)}
+                aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[#52525b] hover:text-[#a1a1aa] transition-colors"
               >
                 {showSenha ? (

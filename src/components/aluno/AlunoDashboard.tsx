@@ -4,7 +4,9 @@ import type { Aluno, Plano, TreinoFicha } from '../../types'
 import { CONQUISTAS_CATALOGO } from '../../constants'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
-import { subtractLocalDays, toLocalDate } from '../../lib/date'
+import { formatLocalDate, parseLocalDate, subtractLocalDays, toLocalDate } from '../../lib/date'
+import { useModalKeyboard } from '../../hooks/useModalKeyboard'
+import PixPaymentCard from './PixPaymentCard'
 
 const PREVIEW_PLAN: Plano = {
   id: 'preview-plano',
@@ -104,7 +106,7 @@ function getFraseDinamica(aluno: Aluno): string {
   if (h < 12) return 'Continue firme no seu treino de hoje!'
   if (h < 15) return 'Um treino no meio do dia é sempre uma boa ideia!'
   if (diasSemana === 1) return 'Semana nova, começo forte. Bora treinar!'
-  if (diasSemana === 5) return 'Quinta-feira é dia de dar tudo na academia!'
+  if (diasSemana === 4) return 'Quinta-feira é dia de dar tudo na academia!'
   if (diasSemana === 6) return 'Finalize a semana com chave de ouro!'
   return 'Cada treino é um passo para a melhor versão de você.'
 }
@@ -232,15 +234,17 @@ function MetaSemanalCard({ aluno }: { aluno: Aluno }) {
 
 // Modal de conquistas
 function ConquistasModal({ aluno, onClose }: { aluno: Aluno; onClose: () => void }) {
+  useModalKeyboard(onClose)
+
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="conquistas-title">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
           <div>
-            <h2 className="font-bold text-white font-mono">Conquistas</h2>
+            <h2 id="conquistas-title" className="font-bold text-white font-mono">Conquistas</h2>
             <p className="text-[#71717a] text-xs">{aluno.conquistasDesbloqueadas.length}/{CONQUISTAS_CATALOGO.length} desbloqueadas</p>
           </div>
-          <button onClick={onClose} className="text-[#52525b] hover:text-white">
+          <button onClick={onClose} aria-label="Fechar conquistas" className="text-[#52525b] hover:text-white">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
@@ -270,12 +274,14 @@ function ConquistasModal({ aluno, onClose }: { aluno: Aluno; onClose: () => void
 
 // Modal de evolução do peso
 function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onClose: () => void; onAtualizar: (p: number) => Promise<void> }) {
+  useModalKeyboard(onClose)
+
   const [novoPeso, setNovoPeso] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
   const chartData = aluno.historicoPeso.map(h => ({
-    data: new Date(h.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+    data: formatLocalDate(h.data).slice(0, 5),
     peso: h.peso,
   }))
 
@@ -286,19 +292,19 @@ function HistoricoPesoModal({ aluno, onClose, onAtualizar }: { aluno: Aluno; onC
     : 0
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="peso-title">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
           <div>
-            <h2 className="font-bold text-white font-mono">Histórico de Peso</h2>
+            <h2 id="peso-title" className="font-bold text-white font-mono">Histórico de Peso</h2>
             <p className="text-[#71717a] text-xs">Sua evolução ao longo do tempo</p>
           </div>
-          <button onClick={onClose} className="text-[#52525b] hover:text-white">
+          <button onClick={onClose} aria-label="Fechar histórico de peso" className="text-[#52525b] hover:text-white">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
         <div className="flex-1 overflow-auto p-5 space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl p-3 text-center">
               <p className="text-[#71717a] text-[10px] mb-1">INICIAL</p>
               <p className="text-white font-bold font-mono">{aluno.historicoPeso[0]?.peso ?? '—'} kg</p>
@@ -469,9 +475,7 @@ function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie
 }
 
 // Mensalidade e forma de pagamento
-function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefined }) {
-  const [showPix, setShowPix] = useState(false)
-
+function MensalidadeTab({ aluno, plano, preview, onPaid }: { aluno: Aluno; plano: Plano | undefined; preview: boolean; onPaid: () => void }) {
   const statusMap = {
     pago: { label: 'Em dia', cls: 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]/30' },
     pendente: { label: 'Pagamento pendente', cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
@@ -479,68 +483,7 @@ function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefin
   }
   const statusCfg = statusMap[aluno.pagamentoStatus]
 
-  const mesMatricula = new Date(aluno.matriculaData).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
-
-  if (showPix) {
-    return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-sm">
-          <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
-            <div>
-              <h2 className="font-bold text-white font-mono">Instruções de PIX</h2>
-              <p className="text-[#71717a] text-xs">Demonstração visual: este QR Code ainda não gera nem confirma uma cobrança real.</p>
-            </div>
-            <button onClick={() => setShowPix(false)} className="text-[#52525b] hover:text-white">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-            </button>
-          </div>
-          <div className="p-5 space-y-4">
-            <div className="bg-[#0f0f0f] border border-[#22c55e]/30 rounded-xl p-6 flex flex-col items-center justify-center">
-              <svg width="80" height="80" viewBox="0 0 100 100" fill="none">
-                <rect x="5" y="5" width="35" height="35" rx="4" stroke="#22c55e" strokeWidth="4" fill="none" />
-                <rect x="15" y="15" width="15" height="15" fill="#22c55e" rx="2" />
-                <rect x="60" y="5" width="35" height="35" rx="4" stroke="#22c55e" strokeWidth="4" fill="none" />
-                <rect x="70" y="15" width="15" height="15" fill="#22c55e" rx="2" />
-                <rect x="5" y="60" width="35" height="35" rx="4" stroke="#22c55e" strokeWidth="4" fill="none" />
-                <rect x="15" y="70" width="15" height="15" fill="#22c55e" rx="2" />
-                <rect x="60" y="60" width="10" height="10" fill="#22c55e" rx="1" />
-                <rect x="75" y="60" width="10" height="10" fill="#22c55e" rx="1" />
-                <rect x="60" y="75" width="10" height="10" fill="#22c55e" rx="1" />
-                <rect x="75" y="75" width="20" height="20" fill="#22c55e" rx="1" />
-                <rect x="45" y="5" width="10" height="10" fill="#22c55e" rx="1" />
-                <rect x="45" y="45" width="10" height="10" fill="#22c55e" rx="1" />
-                <rect x="5" y="45" width="10" height="10" fill="#22c55e" rx="1" />
-                <rect x="20" y="45" width="10" height="10" fill="#22c55e" rx="1" />
-              </svg>
-              <p className="text-yellow-300/70 text-xs mt-3">QR Code ilustrativo</p>
-            </div>
-
-            <div className="bg-[#0f0f0f] border border-[#1f1f1f] rounded-xl p-4">
-              <p className="text-[#71717a] text-xs mb-2">Chave PIX (e-mail)</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-white text-sm font-mono truncate">studiobiofitness@pix.com.br</code>
-                <button
-                  onClick={() => navigator.clipboard.writeText('studiobiofitness@pix.com.br')}
-                  className="flex items-center gap-1.5 text-xs text-[#71717a] hover:text-white border border-[#2a2a2a] hover:border-[#22c55e] px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
-                  Copiar
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-[#22c55e]/5 border border-[#22c55e]/20 rounded-xl p-4">
-              <p className="text-[#52525b] text-xs mb-1">Valor da mensalidade</p>
-              <p className="text-white font-bold font-mono text-xl">R$ {plano?.preco.toFixed(2).replace('.', ',') ?? '0,00'}</p>
-              <p className="text-[#52525b] text-xs mt-2">Após o pagamento, envie o comprovante na recepção para confirmação.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const mesMatricula = parseLocalDate(aluno.matriculaData).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
 
   return (
     <div className="space-y-4">
@@ -561,27 +504,21 @@ function MensalidadeTab({ aluno, plano }: { aluno: Aluno; plano: Plano | undefin
             <span className={`text-xs px-2.5 py-1 rounded-full border ${statusCfg.cls}`}>{statusCfg.label}</span>
             <p className="text-[#52525b] text-xs mt-1.5">
               Próximo vencimento: <span className="text-[#a1a1aa]">
-                {aluno.vencimento ? new Date(aluno.vencimento).toLocaleDateString('pt-BR') : 'Sem previsão'}
+                {aluno.vencimento ? formatLocalDate(aluno.vencimento) : 'Sem previsão'}
               </span>
             </p>
           </div>
         </div>
 
         {aluno.pagamentoStatus !== 'pago' && (
-          <button onClick={() => setShowPix(true)}
-            className="mt-4 flex items-center gap-2 bg-[#22c55e] hover:bg-[#16a34a] text-black font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors">
-            <svg width="16" height="16" viewBox="0 0 100 100" fill="none">
-              <rect x="5" y="5" width="35" height="35" rx="4" stroke="currentColor" strokeWidth="8" fill="none" />
-              <rect x="60" y="5" width="35" height="35" rx="4" stroke="currentColor" strokeWidth="8" fill="none" />
-              <rect x="5" y="60" width="35" height="35" rx="4" stroke="currentColor" strokeWidth="8" fill="none" />
-              <rect x="60" y="60" width="35" height="35" fill="currentColor" rx="4" />
-            </svg>
-            Ver instruções de PIX
-          </button>
+          <div className="mt-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-3">
+            <p className="text-yellow-300 text-sm font-semibold">Pagamento pendente</p>
+            <PixPaymentCard dueDate={aluno.vencimento} preview={preview} onPaid={onPaid} />
+          </div>
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="1.8"><path d="M6.5 6.5a6 6 0 0 0 0 11M17.5 6.5a6 6 0 0 1 0 11M3 12h18M12 3v18" /></svg>, label: 'Plano', value: plano?.nome ?? '—', iconBg: 'bg-[#1a3a1a]' },
           { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>, label: 'Membro desde', value: mesMatricula, iconBg: 'bg-[#1a2a3a]' },
@@ -672,11 +609,11 @@ export default function AlunoDashboard() {
               Voltar para administração
             </button>
           )}
-          <button onClick={onLogout} className="hidden sm:flex items-center gap-2 text-[#71717a] hover:text-white transition-colors text-sm">
+          <button onClick={onLogout} aria-label="Sair da conta" className="flex items-center gap-2 text-[#71717a] hover:text-white transition-colors text-sm">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
             </svg>
-            Sair
+            <span className="hidden sm:inline">Sair</span>
           </button>
         </div>
       </header>
@@ -778,8 +715,7 @@ export default function AlunoDashboard() {
         </div>
 
         {/* Treino tabs */}
-        {(aluno.treinos.length > 0 || true) && (
-          <div>
+        <div>
             <div className="flex gap-1 bg-[#111111] border border-[#1f1f1f] rounded-xl p-1 mb-4 overflow-x-auto">
               {aluno.treinos.map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)}
@@ -797,15 +733,14 @@ export default function AlunoDashboard() {
               <TreinoTab key={t.id} treino={t}
                 onCheckSerie={(exId, serieNum, carga, reps) => onCheckSerie(t.id, exId, serieNum, carga, reps)} />
             ))}
-            {tab === 'mensalidade' && <MensalidadeTab aluno={aluno} plano={plano} />}
+            {tab === 'mensalidade' && <MensalidadeTab aluno={aluno} plano={plano} preview={isPreviewMode} onPaid={() => void loadAluno(aluno.id)} />}
             {aluno.treinos.length === 0 && tab !== 'mensalidade' && (
               <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl p-10 text-center">
                 <p className="text-[#52525b]">Nenhuma ficha de treino cadastrada ainda.</p>
                 <p className="text-[#3f3f46] text-xs mt-1">Aguarde seu professor montar sua ficha.</p>
               </div>
             )}
-          </div>
-        )}
+        </div>
       </main>
 
       {showConquistas && <ConquistasModal aluno={aluno} onClose={() => setShowConquistas(false)} />}

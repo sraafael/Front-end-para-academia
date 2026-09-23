@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 export interface AuditLog {
   id: number
   actorEmail: string
-  action: 'insert' | 'update' | 'delete' | 'reset' | 'seed'
+  action: 'insert' | 'update' | 'delete' | 'reset' | 'seed' | 'password_reset'
   entity: string
   entityId?: string
   label?: string

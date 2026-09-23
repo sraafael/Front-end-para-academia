@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { auditApi, type AuditLog } from '../../../api/audit'
+import { useModalKeyboard } from '../../../hooks/useModalKeyboard'
 
 interface Props { onClose: () => void }
 
@@ -9,6 +10,7 @@ const ACTION_LABELS: Record<AuditLog['action'], string> = {
   delete: 'Exclusão',
   reset: 'Limpeza de dados',
   seed: 'Carga inicial',
+  password_reset: 'Senha redefinida',
 }
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -35,6 +37,8 @@ function formatDateTime(value: string) {
 }
 
 export default function AuditModal({ onClose }: Props) {
+  useModalKeyboard(onClose)
+
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -54,7 +58,7 @@ export default function AuditModal({ onClose }: Props) {
   useEffect(() => { void load() }, [])
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Auditoria">
       <div className="w-full max-w-3xl max-h-[92vh] bg-[#111111] border border-[#2a2a2a] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         <div className="flex items-start justify-between gap-4 px-5 sm:px-6 py-5 border-b border-[#242424]">
           <div>
@@ -87,7 +91,7 @@ export default function AuditModal({ onClose }: Props) {
             <div className="space-y-2">
               {logs.map((log) => (
                 <div key={log.id} className="rounded-xl border border-[#242424] bg-[#0d0d0d] px-4 py-3 flex items-start gap-3">
-                  <div className={`mt-1.5 h-2 w-2 rounded-full flex-shrink-0 ${log.action === 'delete' || log.action === 'reset' ? 'bg-red-400' : log.action === 'seed' ? 'bg-amber-300' : 'bg-[#22c55e]'}`} />
+                  <div className={`mt-1.5 h-2 w-2 rounded-full flex-shrink-0 ${log.action === 'delete' || log.action === 'reset' ? 'bg-red-400' : log.action === 'seed' || log.action === 'password_reset' ? 'bg-amber-300' : 'bg-[#22c55e]'}`} />
                   <div className="min-w-0 flex-1">
                     <p className="text-white text-sm"><span className="font-semibold">{ACTION_LABELS[log.action]}</span> · {ENTITY_LABELS[log.entity] ?? log.entity}</p>
                     {log.label && <p className="text-[#a1a1aa] text-xs mt-0.5 truncate">{log.label}</p>}

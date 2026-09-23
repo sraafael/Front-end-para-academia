@@ -3,7 +3,10 @@ dist/
 build/
 .cache/
 .env*
+!.env.pix-test.example
 .vite/
+.vercel/
+supabase/.temp/
 vite.config.*.timestamp-*
 *.tsbuildinfo
 *-debug.log*

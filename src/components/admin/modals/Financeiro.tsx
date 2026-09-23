@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useModalKeyboard } from '../../../hooks/useModalKeyboard'
 import { useDataStore } from '../../../store/dataStore'
 import { formatLocalDate, toLocalDate } from '../../../lib/date'
+import { isDateInCurrentMonth } from '../../../lib/metrics'
 
 interface Props { onClose: () => void }
 
@@ -18,12 +20,22 @@ export default function Financeiro({ onClose }: Props) {
   const [descricao, setDescricao] = useState('')
   const [valor, setValor] = useState('')
   const [data, setData] = useState(toLocalDate())
+  const [alunoId, setAlunoId] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
+  useModalKeyboard(() => {
+    if (subModal) {
+      setSubModal(null)
+      return
+    }
+    onClose()
+  })
+
   // Totais e indicadores
-  const receitas = transacoes.filter(t => t.tipo === 'receita')
-  const despesas = transacoes.filter(t => t.tipo === 'despesa')
+  const transacoesDoMes = transacoes.filter(t => isDateInCurrentMonth(t.data))
+  const receitas = transacoesDoMes.filter(t => t.tipo === 'receita')
+  const despesas = transacoesDoMes.filter(t => t.tipo === 'despesa')
   const totalReceitas = receitas.reduce((s, t) => s + t.valor, 0)
   const totalDespesas = despesas.reduce((s, t) => s + t.valor, 0)
   const saldo = totalReceitas - totalDespesas
@@ -34,7 +46,7 @@ export default function Financeiro({ onClose }: Props) {
   const pendentes = receitas.filter(t => t.status === 'pendente').length
   const atrasados = receitas.filter(t => t.status === 'atrasado').length
   const previstoMensalidades = alunos
-    .filter(aluno => aluno.status === 'ativo')
+    .filter(aluno => aluno.status !== 'inativo')
     .reduce((total, aluno) => total + (planos.find(plano => plano.id === aluno.planoId)?.preco ?? 0), 0)
   const recebidoMensalidades = receitas
     .filter(transacao => transacao.categoria === 'Mensalidade' && transacao.status === 'pago')
@@ -60,6 +72,10 @@ export default function Financeiro({ onClose }: Props) {
       setFormError('Informe a categoria e um valor válido.')
       return
     }
+    if (subModal === 'receita' && categoria === 'Mensalidade' && !alunoId) {
+      setFormError('Selecione o aluno referente à mensalidade.')
+      return
+    }
     setSaving(true)
     try {
       await addTransacao({
@@ -69,8 +85,9 @@ export default function Financeiro({ onClose }: Props) {
         valor: valorNumerico,
         data,
         status: subModal === 'receita' ? 'pago' : undefined,
+        alunoId: categoria === 'Mensalidade' ? alunoId || undefined : undefined,
       })
-      setSubModal(null); setCategoria(''); setDescricao(''); setValor(''); setData(toLocalDate())
+      setSubModal(null); setCategoria(''); setDescricao(''); setValor(''); setData(toLocalDate()); setAlunoId('')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Não foi possível salvar o lançamento.')
     } finally {
@@ -83,14 +100,14 @@ export default function Financeiro({ onClose }: Props) {
   // Modal de novo lançamento
   if (subModal) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Novo lançamento financeiro">
         <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-md">
           <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
             <div>
               <h2 className="font-bold text-white font-mono">{subModal === 'receita' ? 'Novo Recebimento' : 'Nova Despesa'}</h2>
               <p className="text-[#71717a] text-xs mt-0.5">{subModal === 'receita' ? 'Registre um recebimento' : 'Registre uma despesa'}</p>
             </div>
-            <button onClick={() => setSubModal(null)} className="text-[#52525b] hover:text-white">
+            <button onClick={() => setSubModal(null)} aria-label="Fechar lançamento" className="text-[#52525b] hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
@@ -108,6 +125,18 @@ export default function Financeiro({ onClose }: Props) {
               <input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição opcional"
                 className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e]" />
             </div>
+            {subModal === 'receita' && categoria === 'Mensalidade' && (
+              <div>
+                <label className="block text-[#a1a1aa] text-xs mb-1">Aluno</label>
+                <select value={alunoId} onChange={e => setAlunoId(e.target.value)}
+                  className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e]">
+                  <option value="">Selecione o aluno</option>
+                  {alunos.filter(aluno => aluno.status !== 'inativo').map(aluno => (
+                    <option key={aluno.id} value={aluno.id}>{aluno.nome}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-[#a1a1aa] text-xs mb-1">Valor</label>
               <div className="relative">
@@ -143,14 +172,14 @@ export default function Financeiro({ onClose }: Props) {
 
   // Visão geral financeira
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Financeiro">
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-[#1f1f1f]">
           <div>
             <h2 className="font-bold text-white font-mono text-lg">Financeiro</h2>
-            <p className="text-[#71717a] text-xs mt-0.5">Extrato completo de receitas e despesas da academia</p>
+            <p className="text-[#71717a] text-xs mt-0.5">Receitas e despesas do mês atual</p>
           </div>
-          <button onClick={onClose} className="text-[#52525b] hover:text-white">
+          <button onClick={onClose} aria-label="Fechar financeiro" className="text-[#52525b] hover:text-white">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
@@ -169,11 +198,11 @@ export default function Financeiro({ onClose }: Props) {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { label: 'Total de Receitas', value: fmt(totalReceitas), color: 'text-[#22c55e]', bg: 'bg-[#22c55e]/5 border-[#22c55e]/20' },
-              { label: 'Total de Despesas', value: fmt(totalDespesas), color: 'text-red-400', bg: 'bg-red-500/5 border-red-500/20' },
-              { label: 'Saldo Atual', value: fmt(saldo), color: saldo >= 0 ? 'text-white' : 'text-red-400', bg: 'bg-[#1a1a1a] border-[#2a2a2a]' },
+              { label: 'Receitas do Mês', value: fmt(totalReceitas), color: 'text-[#22c55e]', bg: 'bg-[#22c55e]/5 border-[#22c55e]/20' },
+              { label: 'Despesas do Mês', value: fmt(totalDespesas), color: 'text-red-400', bg: 'bg-red-500/5 border-red-500/20' },
+              { label: 'Saldo do Mês', value: fmt(saldo), color: saldo >= 0 ? 'text-white' : 'text-red-400', bg: 'bg-[#1a1a1a] border-[#2a2a2a]' },
             ].map(c => (
               <div key={c.label} className={`${c.bg} border rounded-xl p-3`}>
                 <p className="text-[#71717a] text-xs mb-1">{c.label}</p>
@@ -188,9 +217,11 @@ export default function Financeiro({ onClose }: Props) {
                 <p className="text-white font-semibold text-sm">Folha de Pagamento dos Professores</p>
                 <p className="text-[#52525b] text-xs">Referência {new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })} · vencimento padrão no 5º dia útil</p>
               </div>
-              <span className="text-xs bg-[#1a2a3a] text-blue-400 px-2 py-1 rounded-full">Ajustes: 0</span>
+              <span className="text-xs bg-[#1a2a3a] text-blue-400 px-2 py-1 rounded-full">
+                {professores.filter(p => p.status === 'ativo').length} ativo(s)
+              </span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-[#1a1a1a] rounded-xl p-3">
                 <p className="text-[#71717a] text-xs mb-1">Total Base</p>
                 <p className="text-white font-bold font-mono text-lg">{fmt(folhaMes)}</p>
@@ -248,7 +279,7 @@ export default function Financeiro({ onClose }: Props) {
             </div>
 
             <div className="space-y-2">
-              {receitas.slice(-5).reverse().map(t => (
+              {receitas.slice(0, 5).map(t => (
                 <div key={t.id} className="flex items-center gap-3 py-1.5 border-b border-[#1a1a1a] last:border-0">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e] flex-shrink-0" />
                   <p className="flex-1 text-white text-xs truncate">{t.descricao || t.categoria}</p>
@@ -256,7 +287,7 @@ export default function Financeiro({ onClose }: Props) {
                   <p className="text-[#52525b] text-xs">{formatLocalDate(t.data)}</p>
                 </div>
               ))}
-              {despesas.slice(-3).reverse().map(t => (
+              {despesas.slice(0, 3).map(t => (
                 <div key={t.id} className="flex items-center gap-3 py-1.5 border-b border-[#1a1a1a] last:border-0">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
                   <p className="flex-1 text-white text-xs truncate">{t.descricao || t.categoria}</p>

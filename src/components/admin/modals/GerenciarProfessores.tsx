@@ -651,7 +651,7 @@ export default function GerenciarProfessores({ onClose }: Props) {
             <h2 className="font-bold text-white font-mono text-lg">Gerenciar Professores</h2>
             <p className="text-[#71717a] text-xs mt-0.5">{professores.length} professor(es) na equipe</p>
           </div>
-          <button onClick={onClose} className="text-[#52525b] hover:text-white">
+          <button onClick={onClose} aria-label="Fechar professores" className="text-[#52525b] hover:text-white">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>

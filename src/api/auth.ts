@@ -7,16 +7,23 @@ export type LoginResult =
   | { ok: true; role: UserRole; userId: string | null; displayName: string; isFirstLogin?: boolean; isOwner: boolean; isPreview: boolean }
   | { ok: false; error: string }
 
-export const OWNER_CPF = '54514214809'
-
 /** Converte CPF e perfil no e-mail interno usado pelo Supabase Auth. */
-export function cpfToEmail(role: UserRole, cpf: string): string {
+function cpfToEmail(role: UserRole, cpf: string): string {
   const digits = cpf.replace(/\D/g, '')
-  if (digits === OWNER_CPF) return 'admin@fitpro.internal'
   if (role === 'admin') {
     return `admin.${digits}@fitpro.internal`
   }
   return `${role}.${digits}@fitpro.internal`
+}
+
+async function resolveLoginEmail(role: UserRole, cpf: string): Promise<string | null> {
+  if (role !== 'owner') return cpfToEmail(role, cpf)
+
+  const { data, error } = await supabase.rpc('resolve_fitpro_owner_login_email', {
+    p_cpf: cpf.replace(/\D/g, ''),
+  })
+  if (error || typeof data !== 'string' || !data) return null
+  return data
 }
 
 // Entrada e validação do perfil
@@ -24,10 +31,8 @@ export async function login(role: UserRole, cpf: string, senha: string): Promise
   if (!isValidCpf(cpf)) {
     return { ok: false, error: 'Informe um CPF válido.' }
   }
-  if (role === 'owner' && cpf.replace(/\D/g, '') !== OWNER_CPF) {
-    return { ok: false, error: 'CPF ou senha incorretos.' }
-  }
-  const email = cpfToEmail(role, cpf)
+  const email = await resolveLoginEmail(role, cpf)
+  if (!email) return { ok: false, error: 'CPF ou senha incorretos.' }
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha })
 
@@ -113,15 +118,6 @@ export async function login(role: UserRole, cpf: string, senha: string): Promise
   }
 
   return { ok: true, role, userId: entityId, displayName, isFirstLogin, isOwner, isPreview }
-}
-
-export async function lookupCpf(role: UserRole, cpf: string): Promise<boolean> {
-  const digits = cpf.replace(/\D/g, '')
-  if (!isValidCpf(cpf)) return false
-  if (digits === OWNER_CPF) return true
-  const table = role === 'owner' || role === 'admin' ? 'academy_admins' : role === 'professor' ? 'professores' : 'alunos'
-  const { data } = await supabase.from(table).select('id').eq('cpf', digits).maybeSingle()
-  return !!data
 }
 
 // Primeiro acesso

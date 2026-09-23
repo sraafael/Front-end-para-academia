@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
 import TreinoProfessorModal from './TreinoProfessorModal'
 import { toLocalDate } from '../../lib/date'
+import { formatDuration, getClassStatusToday, isClassScheduledOnDate } from '../../lib/metrics'
 
 const PREVIEW_PROFESSOR: Professor = {
   id: 'preview-professor',
@@ -69,6 +70,7 @@ const PREVIEW_TURMA: Turma = {
   modalidade: 'Musculação',
   horario: '09:00',
   diasSemana: ['Seg', 'Qua', 'Sex'],
+  duracaoMinutos: 60,
   capacidade: 12,
   professorId: PREVIEW_PROFESSOR.id,
   sala: 'Sala principal',
@@ -132,12 +134,12 @@ export default function ProfessorDashboard() {
 
   // Turmas, alunos e alertas calculados
   const minhasTurmas = displayedTurmas.filter(t => t.professorId === professor.id)
+  const turmasHoje = minhasTurmas.filter(turma => isClassScheduledOnDate(turma))
   const meusAlunos = displayedAlunos.filter(a => a.professorId === professor.id)
-  const sorted = [...minhasTurmas].sort((a, b) => a.horario.localeCompare(b.horario))
-  const horasTrabalhadas = () => {
-    const mins = minhasTurmas.length * 60
-    return `${Math.floor(mins / 60)}h ${mins % 60 > 0 ? `${mins % 60}m` : ''}`
-  }
+  const sorted = [...turmasHoje].sort((a, b) => a.horario.localeCompare(b.horario))
+  const cargaHorariaHoje = formatDuration(
+    turmasHoje.reduce((total, turma) => total + turma.duracaoMinutos, 0),
+  )
 
   const statusConfig = {
     concluida: { label: 'Concluída', cls: 'bg-[#22c55e]/15 text-[#22c55e]' },
@@ -287,11 +289,11 @@ export default function ProfessorDashboard() {
               Voltar para administração
             </button>
           )}
-          <button onClick={handleLogout} className="hidden sm:flex items-center gap-2 text-[#71717a] hover:text-white transition-colors text-sm">
+          <button onClick={handleLogout} aria-label="Sair" className="flex items-center gap-2 text-[#71717a] hover:text-white transition-colors text-sm">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
             </svg>
-            Sair
+            <span className="hidden sm:inline">Sair</span>
           </button>
         </div>
       </header>
@@ -311,11 +313,11 @@ export default function ProfessorDashboard() {
           <p className="text-[#71717a] text-sm mt-1">{getMotivacao()}</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>, label: 'Aulas Hoje', value: minhasTurmas.length, color: 'bg-[#1a2a3a] text-blue-400' },
+            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>, label: 'Aulas Hoje', value: turmasHoje.length, color: 'bg-[#1a2a3a] text-blue-400' },
             { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>, label: 'Meus Alunos', value: meusAlunos.length, color: 'bg-[#1a2a3a] text-blue-400' },
-            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>, label: 'Horas Trabalhadas', value: horasTrabalhadas(), color: 'bg-[#1a2a3a] text-blue-400' },
+            { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>, label: 'Carga de Hoje', value: cargaHorariaHoje, color: 'bg-[#1a2a3a] text-blue-400' },
           ].map((s, i) => (
             <div key={i} className="bg-[#111111] border border-[#1f1f1f] rounded-2xl p-4 flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center flex-shrink-0`}>{s.icon}</div>
@@ -374,7 +376,7 @@ export default function ProfessorDashboard() {
               ) : (
                 <div className="space-y-2">
                   {sorted.map(t => {
-                    const cfg = statusConfig[t.status]
+                    const cfg = statusConfig[getClassStatusToday(t)]
                     return (
                       <button key={t.id} onClick={() => abrirChamada(t)}
                         className="w-full flex items-center gap-4 bg-[#0f0f0f] border border-[#1f1f1f] hover:bg-[#161616] rounded-xl px-4 py-3.5 transition-colors text-left group">

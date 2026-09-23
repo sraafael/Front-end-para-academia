@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
-import { createClient } from '@supabase/supabase-js' 
-import { projectId, publicAnonKey } from '../../utils/supabase/info'
+import { createMemberAccount, resetProfessorAccess } from '../api/members'
 import { toLocalDate } from '../lib/date'
 import { isValidCpf, onlyCpfDigits } from '../lib/cpf'
+import { registrationErrorMessage } from '../lib/databaseError'
+import { calculateAttendanceStreak, countWeeklyAttendance, deriveAchievementIds } from '../lib/metrics'
 import type {
   Aluno, Professor, Turma, Plano, Transacao,
   AlunoStatus, PagamentoStatus, TreinoFicha, TreinoFichaInput, HistoricoPesoEntry, FrequenciaEntry,
@@ -45,6 +46,20 @@ function mapAluno(
   frequencia: FrequenciaEntry[] = [],
   treinos: TreinoFicha[] = [],
 ): Aluno {
+  const weeklyGoal = Math.max(1, Number(r.meta_semanal) || 3)
+  const dueDate = (r.vencimento as string) ?? undefined
+  const storedPaymentStatus = r.pagamento_status as PagamentoStatus
+  const paymentStatus = dueDate && dueDate < toLocalDate()
+    ? 'atrasado'
+    : storedPaymentStatus
+  const storedAchievements = (r.conquistas_desbloqueadas as string[]) ?? []
+  const computedAchievements = deriveAchievementIds({
+    frequencia,
+    historicoPeso,
+    matriculaData: r.matricula_data as string,
+    weeklyGoal,
+  })
+
   return {
     id:                      r.id as string,
     nome:                    r.nome as string,
@@ -61,11 +76,11 @@ function mapAluno(
     matriculaData:           r.matricula_data as string,
     isFirstLogin:            r.is_first_login as boolean,
     formaPagamento:          r.forma_pagamento as string,
-    pagamentoStatus:         r.pagamento_status as PagamentoStatus,
-    vencimento:              (r.vencimento as string) ?? undefined,
-    sequencia:               Number(r.sequencia),
-    metaSemanal:             { meta: Number(r.meta_semanal), concluidos: 0 },
-    conquistasDesbloqueadas: (r.conquistas_desbloqueadas as string[]) ?? [],
+    pagamentoStatus:         paymentStatus,
+    vencimento:              dueDate,
+    sequencia:               calculateAttendanceStreak(frequencia),
+    metaSemanal:             { meta: weeklyGoal, concluidos: countWeeklyAttendance(frequencia) },
+    conquistasDesbloqueadas: Array.from(new Set([...storedAchievements, ...computedAchievements])),
     historicoPeso,
     frequencia,
     treinos,
@@ -115,6 +130,7 @@ function mapTurma(r: Record<string, unknown>): Turma {
     modalidade:  r.modalidade as string,
     horario:     r.horario as string,
     diasSemana:  (r.dias_semana as string[]) ?? [],
+    duracaoMinutos: Number(r.duracao_minutos) || 60,
     capacidade:  Number(r.capacidade),
     professorId: (r.professor_id as string) ?? '',
     sala:        r.sala as string,
@@ -140,12 +156,6 @@ function mapTransacao(r: Record<string, unknown>): Transacao {
 // Store
 type CreateAlunoPayload = Omit<Aluno, 'id' | 'historicoPeso' | 'frequencia' | 'treinos' | 'sequencia' | 'metaSemanal' | 'conquistasDesbloqueadas' | 'pagamentoStatus' | 'isFirstLogin' | 'senha'>
 type CreatedAccount<T> = { record: T; temporaryPassword: string }
-
-function generateTemporaryPassword(): string {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
-  const bytes = crypto.getRandomValues(new Uint8Array(12))
-  return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('')
-}
 
 interface DataState {
   alunos: Aluno[]
@@ -450,30 +460,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     const hoje = toLocalDate()
     if (!isValidCpf(data.cpf)) throw new Error('Informe um CPF válido.')
     const cpfLimpo = onlyCpfDigits(data.cpf)
-    const emailInterno = `aluno.${cpfLimpo}@fitpro.internal`
-    const temporaryPassword = generateTemporaryPassword()
-
-    // 1. Instancia um Cliente Fantasma que NÃO afeta a sessão do Administrador
-    const tempClient = createClient(`https://${projectId}.supabase.co`, publicAnonKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    })
-
-    // 2. Usa a API oficial para criar o usuário perfeitamente
-    const { data: authRes, error: authErr } = await tempClient.auth.signUp({
-      email: emailInterno,
-      password: temporaryPassword,
-      options: { data: { role: 'aluno' } }
-    })
-
-    if (authErr) throw new Error(`Erro ao criar acesso: ${authErr.message}`)
-    if (!authRes.user) throw new Error('Falha ao gerar ID do usuário no sistema.')
-
-    const userId = authRes.user.id
-
-    // 3. Cria o perfil na tabela pública
-    const row = {
-      id: userId,
-      user_id: userId,
+    const result = await createMemberAccount('aluno', {
       nome: data.nome,
       cpf: cpfLimpo,
       telefone: data.telefone,
@@ -485,40 +472,22 @@ export const useDataStore = create<DataState>()((set, get) => ({
       status: data.status,
       turma_id: data.turmaId ?? null,
       matricula_data: data.matriculaData || hoje,
-      is_first_login: true,
       forma_pagamento: data.formaPagamento,
-      pagamento_status: 'pendente',
       vencimento: data.vencimento ?? null,
-    }
-    
-    const { data: inserted, error } = await supabase.from('alunos').insert(row).select().single()
-    if (error) throw new Error(`Erro ao salvar perfil: ${error.message}`)
+    })
 
-    if (data.turmaId) {
-      const { error: turmaError } = await supabase.rpc('vincular_aluno_turma', {
-        p_aluno_id: userId,
-        p_turma_id: data.turmaId,
-      })
-      if (turmaError) throw new Error(`Aluno criado, mas não foi possível vinculá-lo à turma: ${turmaError.message}`)
-    }
-    
-    const novo = mapAluno(inserted as Record<string, unknown>)
+    const historicoPeso = data.peso > 0
+      ? [{ data: data.matriculaData || hoje, peso: data.peso }]
+      : []
+    const novo = mapAluno(result.record, historicoPeso)
     set(s => ({
       alunos: [...s.alunos, novo],
       turmas: data.turmaId ? s.turmas.map(turma => turma.id === data.turmaId
         ? { ...turma, alunoIds: Array.from(new Set([...turma.alunoIds, novo.id])) }
         : turma) : s.turmas,
     }))
-    
-    if (data.peso > 0) {
-      const { error: pesoError } = await supabase.rpc('registrar_peso', {
-        p_aluno_id: novo.id,
-        p_peso: data.peso,
-        p_data: hoje,
-      })
-      if (pesoError) throw new Error(`Aluno criado, mas não foi possível registrar o peso inicial: ${pesoError.message}`)
-    }
-    return { record: novo, temporaryPassword }
+
+    return { record: novo, temporaryPassword: result.temporaryPassword }
   },
 
   updateAluno: async (id, data) => {
@@ -546,7 +515,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     if (data.conquistasDesbloqueadas !== undefined) updates.conquistas_desbloqueadas = data.conquistasDesbloqueadas
     if (Object.keys(updates).length > 0) {
       const { error } = await supabase.from('alunos').update(updates).eq('id', id)
-      if (error) throw new Error(error.message)
+      if (error) throw new Error(registrationErrorMessage(error, 'aluno'))
     }
     set(s => ({
       alunos: s.alunos.map(a => a.id === id ? {
@@ -645,11 +614,25 @@ export const useDataStore = create<DataState>()((set, get) => ({
         if (!(aluno.id in presencas)) return aluno
         const entry = { data: dataChamada, presente: presencas[aluno.id] }
         const jaExiste = aluno.frequencia.some(item => item.data === dataChamada)
+        const frequencia = jaExiste
+          ? aluno.frequencia.map(item => item.data === dataChamada ? entry : item)
+          : [...aluno.frequencia, entry]
+        const weeklyGoal = aluno.metaSemanal.meta
+        const computedAchievements = deriveAchievementIds({
+          frequencia,
+          historicoPeso: aluno.historicoPeso,
+          matriculaData: aluno.matriculaData,
+          weeklyGoal,
+        })
         return {
           ...aluno,
-          frequencia: jaExiste
-            ? aluno.frequencia.map(item => item.data === dataChamada ? entry : item)
-            : [...aluno.frequencia, entry],
+          frequencia,
+          sequencia: calculateAttendanceStreak(frequencia),
+          metaSemanal: { meta: weeklyGoal, concluidos: countWeeklyAttendance(frequencia) },
+          conquistasDesbloqueadas: Array.from(new Set([
+            ...aluno.conquistasDesbloqueadas,
+            ...computedAchievements,
+          ])),
         }
       }),
     }))
@@ -699,30 +682,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
   addProfessor: async (data) => {
     if (!isValidCpf(data.cpf)) throw new Error('Informe um CPF válido.')
     const cpfLimpo = onlyCpfDigits(data.cpf)
-    const emailInterno = `professor.${cpfLimpo}@fitpro.internal`
-    const temporaryPassword = generateTemporaryPassword()
-
-    // 1. Instancia um Cliente Fantasma
-    const tempClient = createClient(`https://${projectId}.supabase.co`, publicAnonKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    })
-
-    // 2. Usa a API oficial para criar o professor perfeitamente
-    const { data: authRes, error: authErr } = await tempClient.auth.signUp({
-      email: emailInterno,
-      password: temporaryPassword,
-      options: { data: { role: 'professor' } }
-    })
-
-    if (authErr) throw new Error(`Erro ao criar acesso: ${authErr.message}`)
-    if (!authRes.user) throw new Error('Falha ao gerar ID do usuário no sistema.')
-
-    const userId = authRes.user.id
-
-    // 3. Cria o perfil do professor
-    const row = {
-      id: userId,
-      user_id: userId,
+    const result = await createMemberAccount('professor', {
       nome: data.nome,
       cpf: cpfLimpo,
       telefone: data.telefone,
@@ -731,15 +691,11 @@ export const useDataStore = create<DataState>()((set, get) => ({
       salario: data.salario,
       especialidade: data.especialidade,
       status: data.status,
-      is_first_login: true
-    }
-    
-    const { data: inserted, error } = await supabase.from('professores').insert(row).select().single()
-    if (error) throw new Error(`Erro ao salvar perfil: ${error.message}`)
-    
-    const professor = mapProfessor(inserted as Record<string, unknown>)
+    })
+
+    const professor = mapProfessor(result.record)
     set(s => ({ professores: [...s.professores, professor] }))
-    return { record: professor, temporaryPassword }
+    return { record: professor, temporaryPassword: result.temporaryPassword }
   },
 
   updateProfessor: async (id, data) => {
@@ -758,29 +714,16 @@ export const useDataStore = create<DataState>()((set, get) => ({
     if (data.feriasInicio !== undefined)  updates.ferias_inicio = data.feriasInicio || null
     if (data.feriasFim !== undefined)     updates.ferias_fim    = data.feriasFim || null
     const { error } = await supabase.from('professores').update(updates).eq('id', id)
-    if (error) throw new Error(error.message)
+    if (error) throw new Error(registrationErrorMessage(error, 'professor'))
     set(s => ({ professores: s.professores.map(p => p.id === id ? { ...p, ...data } : p) }))
   },
 
   resetProfessorPassword: async (id) => {
     if (!id) throw new Error('Professor não encontrado.')
-    const temporaryPassword = generateTemporaryPassword()
-    const { error } = await supabase.rpc('reset_professor_password', {
-      p_professor_id: id,
-      p_temporary_password: temporaryPassword,
-    })
-    if (error) throw new Error(error.message)
-
-    const { data, error: loadError } = await supabase
-      .from('professores')
-      .select('*')
-      .eq('id', id)
-      .single()
-    if (loadError || !data) throw new Error(loadError?.message ?? 'Professor não encontrado.')
-
-    const professor = mapProfessor(data as Record<string, unknown>)
+    const result = await resetProfessorAccess(id)
+    const professor = mapProfessor(result.record)
     set(s => ({ professores: s.professores.map(item => item.id === id ? professor : item) }))
-    return { record: professor, temporaryPassword }
+    return { record: professor, temporaryPassword: result.temporaryPassword }
   },
 
   addTurma: async (data) => {
@@ -789,6 +732,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
       modalidade:   data.modalidade,
       horario:      data.horario,
       dias_semana:  data.diasSemana,
+      duracao_minutos: data.duracaoMinutos,
       capacidade:   data.capacidade,
       professor_id: data.professorId || null,
       sala:         data.sala,
@@ -820,6 +764,43 @@ export const useDataStore = create<DataState>()((set, get) => ({
   },
 
   addTransacao: async (data) => {
+    const isMonthlyPayment = data.tipo === 'receita'
+      && data.categoria === 'Mensalidade'
+      && data.status === 'pago'
+      && Boolean(data.alunoId)
+
+    if (isMonthlyPayment) {
+      const { data: result, error } = await supabase.rpc('registrar_pagamento_mensalidade', {
+        p_aluno_id: data.alunoId as string,
+        p_valor: data.valor,
+        p_data: data.data,
+        p_descricao: data.descricao,
+      })
+      if (error) throw new Error(`Não foi possível registrar a mensalidade: ${error.message}`)
+
+      const payload = result as {
+        transacao?: Record<string, unknown>
+        vencimento?: string
+      } | null
+      if (!payload?.transacao) {
+        throw new Error('A mensalidade foi processada, mas o lançamento não foi retornado.')
+      }
+
+      const transacao = mapTransacao(payload.transacao)
+      set(s => ({
+        transacoes: [transacao, ...s.transacoes],
+        alunos: s.alunos.map(aluno => aluno.id === data.alunoId
+          ? {
+              ...aluno,
+              status: aluno.status === 'atrasado' ? 'ativo' : aluno.status,
+              pagamentoStatus: 'pago',
+              vencimento: payload.vencimento ?? aluno.vencimento,
+            }
+          : aluno),
+      }))
+      return
+    }
+
     const row = {
       tipo:      data.tipo,
       categoria: data.categoria,

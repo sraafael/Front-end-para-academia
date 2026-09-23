@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { isValidCpf, onlyCpfDigits } from '../lib/cpf'
 import { formatPhone, isValidPhone } from '../lib/phone'
-import { projectId, publicAnonKey } from '../../utils/supabase/info'
+import { registrationErrorMessage } from '../lib/databaseError'
+import { invokeProtectedFunction } from './functions'
 
 export interface Academy {
   id?: string
@@ -126,12 +126,6 @@ function mapAdmin(row: Record<string, unknown>): AcademyAdmin {
   }
 }
 
-function generateTemporaryPassword(): string {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
-  const bytes = crypto.getRandomValues(new Uint8Array(12))
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('')
-}
-
 export const academyApi = {
   async listAcademies(): Promise<Academy[]> {
     const { data, error } = await supabase
@@ -224,56 +218,24 @@ export const academyApi = {
       throw new Error('Informe um telefone com DDD e 10 ou 11 números.')
     }
     const cpf = onlyCpfDigits(payload.cpf)
-    const { data: academy, error: academyError } = await supabase
-      .from('academies')
-      .select('id')
-      .eq('id', payload.academyId)
-      .maybeSingle()
-    if (academyError) throw new Error(academyError.message)
-    if (!academy) throw new Error('Salve as informações da academia antes de cadastrar um administrador.')
-
-    const { data: existing, error: existingError } = await supabase
-      .from('academy_admins')
-      .select('id')
-      .eq('cpf', cpf)
-      .maybeSingle()
-    if (existingError) throw new Error(existingError.message)
-    if (existing) throw new Error('Já existe um administrador cadastrado com este CPF.')
-
-    const internalEmail = `admin.${cpf}@fitpro.internal`
-    const temporaryPassword = generateTemporaryPassword()
-    const tempClient = createClient(`https://${projectId}.supabase.co`, publicAnonKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
+    const result = await invokeProtectedFunction<{
+      record?: Record<string, unknown>
+      temporaryPassword?: string
+    }>('create-academy-admin', {
+      profile: {
+        academyId: payload.academyId,
+        nome: payload.nome.trim(),
+        cpf,
+        telefone: formatPhone(payload.telefone),
+        email: payload.email.trim(),
+        cargo: payload.cargo.trim() || 'Administrador',
+      },
     })
 
-    const { data: authResult, error: authError } = await tempClient.auth.signUp({
-      email: internalEmail,
-      password: temporaryPassword,
-      options: { data: { role: 'admin', cpf, nome: payload.nome } },
-    })
-    if (authError) throw new Error(`Não foi possível criar o acesso: ${authError.message}`)
-    if (!authResult.user || authResult.user.identities?.length === 0) {
-      throw new Error('Já existe uma conta de acesso iniciada para este CPF. Revise o cadastro antes de tentar novamente.')
+    if (!result.record || typeof result.temporaryPassword !== 'string') {
+      throw new Error('O servidor não retornou os dados do novo administrador.')
     }
-
-    const { data, error } = await supabase.rpc('complete_academy_admin_registration', {
-      p_user_id: authResult.user.id,
-      p_nome: payload.nome.trim(),
-      p_cpf: cpf,
-      p_telefone: formatPhone(payload.telefone),
-      p_email: payload.email.trim(),
-      p_cargo: payload.cargo.trim() || 'Administrador',
-      p_academy_id: payload.academyId,
-    })
-    if (error) throw new Error(`A conta foi iniciada, mas o perfil não pôde ser concluído: ${error.message}`)
-
-    const { data: saved, error: loadError } = await supabase
-      .from('academy_admins')
-      .select('*')
-      .eq('id', String(data))
-      .single()
-    if (loadError || !saved) throw new Error(loadError?.message ?? 'Administrador não encontrado após o cadastro.')
-    return { admin: mapAdmin(saved as Record<string, unknown>), temporaryPassword }
+    return { admin: mapAdmin(result.record), temporaryPassword: result.temporaryPassword }
   },
 
   async assignAdminToAcademy(adminId: string, academyId: string): Promise<AcademyAdmin> {
@@ -309,7 +271,7 @@ export const academyApi = {
       p_cargo: payload.cargo.trim() || 'Administrador',
       p_status: payload.status,
     })
-    if (error) throw new Error(error.message)
+    if (error) throw new Error(registrationErrorMessage(error, 'administrador'))
 
     const { data, error: loadError } = await supabase
       .from('academy_admins')
@@ -321,20 +283,17 @@ export const academyApi = {
   },
 
   async resetAdminPassword(adminId: string): Promise<{ admin: AcademyAdmin; temporaryPassword: string }> {
-    const temporaryPassword = generateTemporaryPassword()
-    const { error } = await supabase.rpc('reset_academy_admin_password', {
-      p_admin_id: adminId,
-      p_temporary_password: temporaryPassword,
+    const result = await invokeProtectedFunction<{
+      record?: Record<string, unknown>
+      temporaryPassword?: string
+    }>('reset-access-password', {
+      targetRole: 'admin',
+      targetId: adminId,
     })
-    if (error) throw new Error(error.message)
-
-    const { data, error: loadError } = await supabase
-      .from('academy_admins')
-      .select('*')
-      .eq('id', adminId)
-      .single()
-    if (loadError || !data) throw new Error(loadError?.message ?? 'Administrador não encontrado.')
-    return { admin: mapAdmin(data as Record<string, unknown>), temporaryPassword }
+    if (!result.record || typeof result.temporaryPassword !== 'string') {
+      throw new Error('O servidor não retornou a nova credencial do administrador.')
+    }
+    return { admin: mapAdmin(result.record), temporaryPassword: result.temporaryPassword }
   },
 
   async deleteAdmin(adminId: string): Promise<void> {

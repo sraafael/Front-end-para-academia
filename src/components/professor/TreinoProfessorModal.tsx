@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Aluno, TreinoFicha, TreinoFichaInput } from '../../types'
 import { useDataStore } from '../../store/dataStore'
+import { useModalKeyboard } from '../../hooks/useModalKeyboard'
 
 // Contratos do modal
 interface Props {
@@ -33,6 +34,8 @@ function diasDesde(data?: string) {
 }
 
 export default function TreinoProfessorModal({ aluno, onClose, readOnly = false }: Props) {
+  useModalKeyboard(onClose)
+
   // Estado do formulário
   const saveTreino = useDataStore(state => state.saveTreino)
   const [editando, setEditando] = useState(aluno.treinos.length === 0)
@@ -129,7 +132,7 @@ export default function TreinoProfessorModal({ aluno, onClose, readOnly = false 
 
   // Interface do modal
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5" role="dialog" aria-modal="true" aria-label={`Fichas de treino de ${aluno.nome}`}>
       <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-4 p-5 border-b border-[#1f1f1f]">
           <div className="min-w-0">
@@ -191,7 +194,7 @@ export default function TreinoProfessorModal({ aluno, onClose, readOnly = false 
                             className="text-red-400/70 hover:text-red-400 text-xs p-2">Remover</button>
                         )}
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {([
                           ['series', 'Séries'],
                           ['reps', 'Repetições'],
