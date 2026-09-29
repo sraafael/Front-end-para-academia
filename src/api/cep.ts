@@ -1,3 +1,5 @@
+// Resposta externa do ViaCEP. Ela é convertida para um formato pequeno e
+// estável antes de chegar ao formulário de academia.
 interface ViaCepResponse {
   erro?: boolean | 'true'
   logradouro?: string

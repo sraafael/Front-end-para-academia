@@ -1,3 +1,4 @@
+// Utilitários compartilhados pelos cadastros de academia, aluno e professor.
 export function onlyPhoneDigits(value: string): string {
   return value.replace(/\D/g, '').slice(0, 11)
 }
@@ -14,6 +15,6 @@ export function formatPhone(value: string): string {
 }
 
 export function isValidPhone(value: string): boolean {
-  const digits = onlyPhoneDigits(value)
+  const digits = value.replace(/\D/g, '')
   return digits.length === 10 || digits.length === 11
 }

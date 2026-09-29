@@ -3,6 +3,7 @@ import { useModalKeyboard } from '../../../hooks/useModalKeyboard'
 import { useDataStore } from '../../../store/dataStore'
 import { formatLocalDate, toLocalDate } from '../../../lib/date'
 import { isDateInCurrentMonth } from '../../../lib/metrics'
+import PixHistory from './PixHistory'
 
 interface Props { onClose: () => void }
 
@@ -240,7 +241,7 @@ export default function Financeiro({ onClose }: Props) {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-white font-semibold text-sm">Recebimentos Recentes</p>
-                <p className="text-[#52525b] text-xs">Lançamentos registrados pela administração; ainda não há confirmação automática por provedor.</p>
+                <p className="text-[#52525b] text-xs">Receitas e despesas registradas no caixa da academia.</p>
               </div>
               <div className="flex gap-2">
                 <span className="text-xs bg-[#22c55e]/15 text-[#22c55e] px-2 py-1 rounded-full">Pago: {pagos}</span>
@@ -297,6 +298,8 @@ export default function Financeiro({ onClose }: Props) {
               ))}
             </div>
           </div>
+
+          <PixHistory />
         </div>
       </div>
     </div>

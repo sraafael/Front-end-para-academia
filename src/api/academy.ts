@@ -4,6 +4,8 @@ import { formatPhone, isValidPhone } from '../lib/phone'
 import { registrationErrorMessage } from '../lib/databaseError'
 import { invokeProtectedFunction } from './functions'
 
+// Contratos usados pelo painel do proprietário. A API concentra a tradução
+// entre os nomes em camelCase da interface e as colunas snake_case do banco.
 export interface Academy {
   id?: string
   nomeFantasia: string
@@ -23,6 +25,8 @@ export interface Academy {
   bairro: string
   cidade: string
   estado: string
+  pixTitularNome: string
+  pixTitularDocumento: string
   horarioSemana: string
   horarioSabado: string
   horarioDomingo: string
@@ -78,6 +82,8 @@ const EMPTY_ACADEMY: Academy = {
   bairro: '',
   cidade: '',
   estado: '',
+  pixTitularNome: '',
+  pixTitularDocumento: '',
   horarioSemana: '',
   horarioSabado: '',
   horarioDomingo: '',
@@ -105,6 +111,8 @@ function mapAcademy(row?: Record<string, unknown> | null): Academy {
     bairro: String(row.bairro ?? ''),
     cidade: String(row.cidade ?? ''),
     estado: String(row.estado ?? ''),
+    pixTitularNome: String(row.pix_titular_nome ?? ''),
+    pixTitularDocumento: String(row.pix_titular_documento ?? ''),
     horarioSemana: String(row.horario_semana ?? ''),
     horarioSabado: String(row.horario_sabado ?? ''),
     horarioDomingo: String(row.horario_domingo ?? ''),
@@ -126,6 +134,8 @@ function mapAdmin(row: Record<string, unknown>): AcademyAdmin {
   }
 }
 
+// Operações comuns usam o cliente Supabase com RLS. Criação e redefinição
+// de acessos passam por Edge Functions, pois precisam alterar o Supabase Auth.
 export const academyApi = {
   async listAcademies(): Promise<Academy[]> {
     const { data, error } = await supabase
@@ -134,12 +144,6 @@ export const academyApi = {
       .order('nome_fantasia')
     if (error) throw new Error(error.message)
     return (data ?? []).map((row) => mapAcademy(row as Record<string, unknown>))
-  },
-
-  async getAcademy(): Promise<Academy> {
-    const { data, error } = await supabase.from('academies').select('*').limit(1).maybeSingle()
-    if (error) throw new Error(error.message)
-    return mapAcademy(data as Record<string, unknown> | null)
   },
 
   async saveAcademy(academy: Academy): Promise<Academy> {
@@ -155,6 +159,10 @@ export const academyApi = {
     }
     if (academy.whatsapp && !isValidPhone(academy.whatsapp)) {
       throw new Error('Informe um WhatsApp com DDD e 10 ou 11 números.')
+    }
+    const pixDocument = academy.pixTitularDocumento.replace(/\D/g, '')
+    if (pixDocument && ![11, 14].includes(pixDocument.length)) {
+      throw new Error('Informe CPF ou CNPJ do titular com 11 ou 14 números.')
     }
     const row = {
       nome_fantasia: academy.nomeFantasia.trim(),
@@ -174,6 +182,8 @@ export const academyApi = {
       bairro: academy.bairro.trim(),
       cidade: academy.cidade.trim(),
       estado: academy.estado.trim().toUpperCase().slice(0, 2),
+      pix_titular_nome: academy.pixTitularNome.trim(),
+      pix_titular_documento: pixDocument,
       horario_semana: academy.horarioSemana.trim(),
       horario_sabado: academy.horarioSabado.trim(),
       horario_domingo: academy.horarioDomingo.trim(),

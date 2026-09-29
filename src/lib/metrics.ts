@@ -1,6 +1,8 @@
 import type { FrequenciaEntry, HistoricoPesoEntry, Turma, TurmaStatus } from '../types'
 import { parseLocalDate, toLocalDate } from './date'
 
+// Regras derivadas usadas nos painéis. Nenhuma função deste arquivo grava no
+// banco: elas apenas calculam status, sequências, metas e conquistas para a UI.
 const DAY_KEYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab']
 
 function normalizeDay(value: string) {
@@ -40,6 +42,7 @@ export function isDateInCurrentMonth(value: string, reference = new Date()) {
     && date.getMonth() === reference.getMonth()
 }
 
+// Métricas de frequência do aluno.
 export function countWeeklyAttendance(frequencia: FrequenciaEntry[], reference = new Date()) {
   const monday = new Date(reference)
   monday.setHours(12, 0, 0, 0)
@@ -118,6 +121,7 @@ export function deriveAchievementIds({
   return ids
 }
 
+// Formata a duração das aulas para os cards dos painéis.
 export function formatDuration(minutes: number) {
   const safeMinutes = Math.max(0, Math.round(minutes))
   const hours = Math.floor(safeMinutes / 60)

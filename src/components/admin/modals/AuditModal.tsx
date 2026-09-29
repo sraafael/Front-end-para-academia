@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { auditApi, type AuditLog } from '../../../api/audit'
 import { useModalKeyboard } from '../../../hooks/useModalKeyboard'
 
+// Traduz os identificadores persistidos no banco em textos legíveis no painel.
 interface Props { onClose: () => void }
 
 const ACTION_LABELS: Record<AuditLog['action'], string> = {
@@ -43,6 +44,7 @@ export default function AuditModal({ onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // A lista é recarregada sob demanda para incluir ações feitas com o modal aberto.
   const load = async () => {
     setLoading(true)
     setError('')

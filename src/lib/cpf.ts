@@ -1,3 +1,4 @@
+// Normalização, máscara visual e validação dos dígitos verificadores do CPF.
 export function onlyCpfDigits(value: string): string {
   return value.replace(/\D/g, '').slice(0, 11)
 }
@@ -11,7 +12,7 @@ export function formatCpf(value: string): string {
 }
 
 export function isValidCpf(value: string): boolean {
-  const digits = onlyCpfDigits(value)
+  const digits = value.replace(/\D/g, '')
   if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return false
 
   const calculateDigit = (length: number) => {

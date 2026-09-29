@@ -2,6 +2,8 @@ import { supabase } from '../lib/supabase'
 import type { UserRole } from '../types'
 import { invokeProtectedFunction } from './functions'
 
+// Fluxo de recuperação: o aluno abre um pedido e um administrador confirma a
+// identidade antes de gerar uma nova senha temporária.
 export interface RecoveryAcademy { id: string; name: string }
 export interface StudentRecoveryRequest {
   id: string
@@ -40,6 +42,7 @@ export async function getRecoveryWhatsapp(role: UserRole, cpf: string): Promise<
   return String(data ?? '').replace(/\D/g, '')
 }
 
+// Monta somente o link; abrir o WhatsApp continua sendo uma ação explícita do usuário.
 export function buildWhatsappRecoveryUrl(phone: string, message: string): string {
   const localPhone = phone.replace(/\D/g, '')
   const brazilPhone = localPhone && !localPhone.startsWith('55') ? `55${localPhone}` : localPhone

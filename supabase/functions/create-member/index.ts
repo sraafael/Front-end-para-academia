@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { digitsOnly, isValidCpfDigits, isValidPhoneDigits } from '../_shared/identity.ts'
 
 type MemberRole = 'aluno' | 'professor'
 type ConflictField = 'cpf' | 'telefone' | 'email'
@@ -14,25 +15,6 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' },
   })
-}
-
-function onlyCpfDigits(value: unknown) {
-  return String(value ?? '').replace(/\D/g, '').slice(0, 11)
-}
-
-function isValidCpf(value: string) {
-  if (value.length !== 11 || /^(\d)\1{10}$/.test(value)) return false
-
-  const digit = (length: number) => {
-    let sum = 0
-    for (let index = 0; index < length; index += 1) {
-      sum += Number(value[index]) * (length + 1 - index)
-    }
-    const remainder = (sum * 10) % 11
-    return remainder === 10 ? 0 : remainder
-  }
-
-  return digit(9) === Number(value[9]) && digit(10) === Number(value[10])
 }
 
 function generateTemporaryPassword() {
@@ -102,12 +84,15 @@ Deno.serve(async request => {
       return jsonResponse({ error: 'Dados do cadastro inválidos.' }, 400)
     }
 
-    const cpf = onlyCpfDigits(profile.cpf)
+    const cpf = digitsOnly(profile.cpf)
     const nome = String(profile.nome ?? '').trim()
-    const telefone = String(profile.telefone ?? '').replace(/\D/g, '').slice(0, 11)
+    const telefone = digitsOnly(profile.telefone)
     const email = String(profile.email ?? '').trim().toLowerCase()
     if (!nome) return jsonResponse({ error: 'Informe o nome.' }, 400)
-    if (!isValidCpf(cpf)) return jsonResponse({ error: 'Informe um CPF válido.' }, 400)
+    if (!isValidCpfDigits(cpf)) return jsonResponse({ error: 'Informe um CPF válido.' }, 400)
+    if (telefone && !isValidPhoneDigits(telefone)) {
+      return jsonResponse({ error: 'Informe um telefone válido.' }, 400)
+    }
 
     const { data: conflict, error: conflictError } = await adminClient.rpc('find_fitpro_registration_conflict', {
       p_role: role,

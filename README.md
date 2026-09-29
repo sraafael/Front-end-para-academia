@@ -15,12 +15,21 @@ O acesso usa **CPF e senha**. O CPF é convertido para uma identificação inter
 
 ## Como o projeto está organizado
 
-- `src/app/routes.tsx`: páginas e proteção por perfil.
-- `src/components/`: telas e formulários.
-- `src/store/`: sessão e dados exibidos nos painéis.
-- `src/api/`: chamadas ao Supabase e às funções do servidor.
+- `src/main.tsx` e `src/App.tsx`: entrada do React, restauração da sessão e roteador.
+- `src/app/routes.tsx`: rotas públicas e painéis protegidos por perfil.
+- `src/components/auth/`: escolha do perfil, login, recuperação e primeiro acesso.
+- `src/components/owner/`: painel exclusivo do proprietário.
+- `src/components/admin/`: painel operacional, cadastros, financeiro e relatórios.
+- `src/components/professor/` e `src/components/aluno/`: experiências dos demais perfis.
+- `src/store/authStore.ts`: sessão autenticada; `src/store/dataStore.ts`: dados dos painéis.
+- `src/api/`: fronteira entre a interface e o Supabase/Edge Functions.
+- `src/lib/`: regras puras de CPF, telefone, datas, métricas e erros.
 - `supabase/migrations/`: evolução do banco, funções SQL e políticas de acesso.
-- `supabase/functions/`: criação de contas e redefinição de senha no servidor.
+- `supabase/functions/`: operações sensíveis executadas no servidor.
+
+Fluxo principal: a rota protegida consulta `authStore`; o painel pede os dados
+ao `dataStore` ou a um módulo de `src/api`; o cliente Supabase aplica RLS nas
+consultas comuns e as Edge Functions tratam contas, senhas e Pix.
 
 O navegador consulta os dados pelo Supabase. As políticas de segurança do banco (RLS) restringem o acesso conforme o perfil e a academia. Operações sensíveis de criação de contas e redefinição de senha passam pelas Edge Functions, que validam o administrador antes de usar privilégios de servidor. Alterações administrativas são registradas em `audit_logs`.
 
@@ -45,10 +54,12 @@ pnpm typecheck
 pnpm build
 ```
 
-Esses comandos verificam os tipos e a compilação da aplicação. A validação de cada fluxo pode ser feita manualmente, usando perfis fictícios.
+Esses comandos verificam os tipos e a compilação da aplicação. A validação de
+cada fluxo pode ser feita manualmente, criando os perfis de teste a partir do
+painel do proprietário. Assim, cada cenário começa com dados conhecidos.
 
 ## Demonstração e limites
 
 O [roteiro de validação](docs/roteiro-validacao.md) sugere uma apresentação curta para a banca e uma conferência manual dos fluxos. Evite usar CPF, telefone, e-mail ou senha de pessoas reais na demonstração.
 
-O pagamento Pix opcional por academia já tem tabelas e funções publicadas no Supabase, mas continua desligado e em modo de teste. Ainda faltam as credenciais do Mercado Pago e a validação de uma cobrança completa. O [guia do Pix](docs/pix-mercado-pago.md) mostra o estado atual e o que falta para ativá-lo. A recuperação de acesso encaminha uma solicitação à administração; ela não redefine a senha automaticamente. A segurança das políticas RLS e dos fluxos reais de autenticação precisa continuar sendo verificada sempre que o esquema do banco mudar.
+O Pix é opcional e ativado individualmente por academia. O [guia do Pix](docs/pix-mercado-pago.md) explica o vínculo da conta recebedora, a conciliação periódica e os cuidados operacionais. A recuperação de acesso encaminha uma solicitação à administração; ela não redefine a senha automaticamente. A segurança das políticas RLS e dos fluxos de autenticação precisa continuar sendo verificada sempre que o esquema do banco mudar.

@@ -4,6 +4,8 @@ import { useAuthStore } from '../../store/authStore'
 import AcademyManagementModal from '../admin/modals/AcademyManagementModal'
 import AuditModal from '../admin/modals/AuditModal'
 
+// Página inicial exclusiva do proprietário. A gestão detalhada foi mantida
+// em componentes próprios para esta tela continuar apenas como composição.
 export default function OwnerDashboard() {
   const navigate = useNavigate()
   const logout = useAuthStore((state) => state.logout)

@@ -5,7 +5,10 @@ import { formatCpf, isValidCpf } from '../../../lib/cpf'
 import { formatPhone, isValidPhone } from '../../../lib/phone'
 import { useAuthStore } from '../../../store/authStore'
 import TemporaryAccessModal from './TemporaryAccessModal'
+import OwnerPixSection from '../../owner/OwnerPixSection'
 
+// Tela central do proprietário: cadastro das unidades, administradores e conta
+// recebedora do Pix. `standalone` remove a moldura de modal no dashboard.
 interface Props {
   onClose?: () => void
   standalone?: boolean
@@ -25,6 +28,7 @@ const EMPTY_ACADEMY: Academy = {
   nomeFantasia: '', razaoSocial: '', cnpj: '', inscricaoEstadual: '', inscricaoMunicipal: '', responsavelLegal: '',
   telefone: '', whatsapp: '', email: '', site: '',
   cep: '', endereco: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '',
+  pixTitularNome: '', pixTitularDocumento: '',
   horarioSemana: '06:00 às 23:00', horarioSabado: '08:00 às 18:00', horarioDomingo: 'Fechado', observacoes: '',
 }
 
@@ -91,6 +95,8 @@ function OpeningHoursEditor({ label, value, defaultStart, defaultEnd, required =
 
 export default function AcademyManagementModal({ onClose, standalone = false }: Props) {
   const isOwner = useAuthStore((state) => state.isOwner)
+
+  // Estado da unidade selecionada e dos fluxos auxiliares (edição, acesso e exclusão).
   const [tab, setTab] = useState<Tab>('academy')
   const [academies, setAcademies] = useState<Academy[]>([])
   const [selectedAcademyId, setSelectedAcademyId] = useState('')
@@ -116,6 +122,7 @@ export default function AcademyManagementModal({ onClose, standalone = false }: 
   const [adminForm, setAdminForm] = useState({ academyId: '', nome: '', cpf: '', telefone: '', email: '', cargo: 'Administrador' })
   const [temporaryAccess, setTemporaryAccess] = useState<{ nome: string; cpf: string; senha: string; mode: 'created' | 'reset' } | null>(null)
 
+  // Carrega unidades e responsáveis em paralelo sempre que o proprietário entra.
   const load = async () => {
     setLoading(true)
     setError('')
@@ -141,6 +148,7 @@ export default function AcademyManagementModal({ onClose, standalone = false }: 
 
   const setField = (field: keyof Academy, value: string) => setAcademy((current) => ({ ...current, [field]: value }))
 
+  // Preenche o endereço pelo CEP e ignora respostas antigas de buscas concorrentes.
   const findAddressByCep = async (value: string) => {
     const cep = value.replace(/\D/g, '')
     if (cep.length !== 8) {
@@ -187,6 +195,7 @@ export default function AcademyManagementModal({ onClose, standalone = false }: 
     }
   }
 
+  // Validações do formulário da academia ficam antes da chamada de persistência.
   const saveAcademy = async (event: React.FormEvent) => {
     event.preventDefault()
     setError('')
@@ -209,6 +218,11 @@ export default function AcademyManagementModal({ onClose, standalone = false }: 
     }
     if (academy.cep && academy.cep.replace(/\D/g, '').length !== 8) {
       setError('Informe um CEP com 8 números.')
+      return
+    }
+    const payeeDocument = academy.pixTitularDocumento.replace(/\D/g, '')
+    if (payeeDocument && ![11, 14].includes(payeeDocument.length)) {
+      setError('Informe CPF ou CNPJ do titular do Mercado Pago.')
       return
     }
     if (!hasCompleteHours(academy.horarioSemana)) {
@@ -243,6 +257,7 @@ export default function AcademyManagementModal({ onClose, standalone = false }: 
     }
   }
 
+  // Cria o usuário no servidor e abre a credencial temporária retornada uma vez.
   const createAdmin = async (event: React.FormEvent) => {
     event.preventDefault()
     setError('')
@@ -277,6 +292,7 @@ export default function AcademyManagementModal({ onClose, standalone = false }: 
     }
   }
 
+  // Troca de unidade e ações de manutenção dos administradores.
   const selectAcademy = (academyId: string) => {
     const selected = academies.find((item) => item.id === academyId)
     if (!selected) return
@@ -436,6 +452,7 @@ export default function AcademyManagementModal({ onClose, standalone = false }: 
     }
   }
 
+  // O proprietário nunca aparece na lista editável de administradores.
   const managedAdmins = admins.filter((admin) => !admin.isOwner)
 
   return (
@@ -544,6 +561,25 @@ export default function AcademyManagementModal({ onClose, standalone = false }: 
                     <label className="sm:col-span-1 text-[#a1a1aa] text-xs">UF *<input required value={academy.estado} onChange={(e) => setField('estado', e.target.value.toUpperCase().slice(0, 2))} className="field-dark" maxLength={2} placeholder="SP" /></label>
                   </div>
                 </section>
+              </fieldset>
+
+              <section className="rounded-2xl border border-[#242424] bg-[#0d0d0d] p-5">
+                <p className="text-[#71717a] text-[10px] font-mono tracking-widest">DADOS FINANCEIROS</p>
+                <p className="mt-1 text-xs text-[#71717a]">Estes dados ajudam a conferir o titular. O dinheiro vai para a conta Mercado Pago autorizada, não para uma chave digitada aqui.</p>
+                <fieldset disabled={!academyEditing} className="mt-4 grid gap-4 sm:grid-cols-2 disabled:[&_input]:cursor-not-allowed disabled:[&_input]:opacity-65">
+                  <label className="text-[#a1a1aa] text-xs">Titular da conta Mercado Pago
+                    <input value={academy.pixTitularNome} onChange={(e) => setField('pixTitularNome', e.target.value)} className="field-dark" placeholder="Nome da empresa ou do titular" />
+                  </label>
+                  <label className="text-[#a1a1aa] text-xs">CPF ou CNPJ do titular
+                    <input inputMode="numeric" maxLength={14} value={academy.pixTitularDocumento} onChange={(e) => setField('pixTitularDocumento', e.target.value.replace(/\D/g, '').slice(0, 14))} className="field-dark" placeholder="Somente números" />
+                  </label>
+                </fieldset>
+                <div className="mt-5 border-t border-[#292929] pt-5">
+                  <OwnerPixSection academyId={selectedAcademyId} />
+                </div>
+              </section>
+
+              <fieldset disabled={!academyEditing} className="space-y-5 disabled:[&_input]:cursor-not-allowed disabled:[&_input]:opacity-65 disabled:[&_textarea]:cursor-not-allowed disabled:[&_textarea]:opacity-65">
 
                 <section className="rounded-2xl border border-[#242424] bg-[#0d0d0d] p-5">
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

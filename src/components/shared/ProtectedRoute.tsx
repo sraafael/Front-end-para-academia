@@ -23,8 +23,7 @@ export default function ProtectedRoute({ role }: Props) {
   }
 
   if (userRole !== role) {
-    // Ao alternar do preview para a administração, o perfil muda antes da
-    // rota. Redirecionar ao painel correto evita encerrar a navegação no login.
+    // Direciona a sessão autenticada para o painel do perfil correto.
     return <Navigate to={`/${userRole}/dashboard`} replace />
   }
 

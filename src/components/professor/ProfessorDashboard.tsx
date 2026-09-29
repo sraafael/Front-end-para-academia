@@ -1,83 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import type { Aluno, Professor, Turma } from '../../types'
+import type { Aluno, Turma } from '../../types'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
 import TreinoProfessorModal from './TreinoProfessorModal'
 import { toLocalDate } from '../../lib/date'
 import { formatDuration, getClassStatusToday, isClassScheduledOnDate } from '../../lib/metrics'
-
-const PREVIEW_PROFESSOR: Professor = {
-  id: 'preview-professor',
-  nome: 'Perfil de Professor',
-  cpf: '',
-  senha: '',
-  telefone: '(00) 00000-0000',
-  email: 'professor@academia.com',
-  horario: '07:00 - 15:00',
-  salario: 0,
-  especialidade: 'Musculação',
-  status: 'ativo',
-}
-
-const PREVIEW_ALUNO: Aluno = {
-  id: 'preview-aluno-professor',
-  nome: 'Aluno Demonstração',
-  cpf: '',
-  senha: '',
-  telefone: '(00) 00000-0000',
-  email: 'aluno@academia.com',
-  idade: 26,
-  peso: 74.5,
-  planoId: 'preview-plano',
-  professorId: PREVIEW_PROFESSOR.id,
-  turmaId: 'preview-turma',
-  status: 'ativo',
-  matriculaData: toLocalDate(),
-  isFirstLogin: false,
-  historicoPeso: [{ data: toLocalDate(), peso: 74.5 }],
-  frequencia: [{ data: toLocalDate(), presente: true }],
-  treinos: [{
-    id: 'preview-ficha',
-    nome: 'Treino A',
-    grupo: 'Peito e tríceps',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    exercicios: [{
-      id: 'preview-exercicio',
-      nome: 'Supino reto',
-      series: 3,
-      reps: 10,
-      cargaSugerida: 30,
-      seriesRealizadas: [1, 2, 3].map(serieNum => ({
-        serieNum,
-        cargaReal: 30,
-        repeticoes: 10,
-        concluida: false,
-      })),
-    }],
-  }],
-  sequencia: 3,
-  metaSemanal: { meta: 3, concluidos: 1 },
-  conquistasDesbloqueadas: [],
-  formaPagamento: 'PIX',
-  pagamentoStatus: 'pago',
-}
-
-const PREVIEW_TURMA: Turma = {
-  id: 'preview-turma',
-  nome: 'Musculação — Turma A',
-  modalidade: 'Musculação',
-  horario: '09:00',
-  diasSemana: ['Seg', 'Qua', 'Sex'],
-  duracaoMinutos: 60,
-  capacidade: 12,
-  professorId: PREVIEW_PROFESSOR.id,
-  sala: 'Sala principal',
-  alunoIds: [PREVIEW_ALUNO.id],
-  status: 'proxima',
-  createdAt: new Date().toISOString(),
-}
 
 // Saudação e mensagem contextual
 function getGreeting() {
@@ -95,17 +23,14 @@ function getMotivacao(): string {
 export default function ProfessorDashboard() {
   // Sessão, dados e estado local
   const navigate = useNavigate()
-  const { currentProfessorId, logout, isPreviewMode, exitPreview } = useAuthStore()
+  const { currentProfessorId, logout } = useAuthStore()
   const { professores, turmas, alunos, loadProfessorDashboard, saveAttendance, loading, error } = useDataStore()
-  const professor = isPreviewMode ? PREVIEW_PROFESSOR : professores.find(p => p.id === currentProfessorId)
-  const displayedTurmas = isPreviewMode ? [PREVIEW_TURMA] : turmas
-  const displayedAlunos = isPreviewMode ? [PREVIEW_ALUNO] : alunos
+  const professor = professores.find(p => p.id === currentProfessorId)
   const handleLogout = () => { logout(); navigate('/login') }
-  const handleExitPreview = () => { exitPreview(); navigate('/admin/dashboard') }
 
   useEffect(() => {
-    if (currentProfessorId && !isPreviewMode) loadProfessorDashboard(currentProfessorId)
-  }, [currentProfessorId, isPreviewMode, loadProfessorDashboard])
+    if (currentProfessorId) loadProfessorDashboard(currentProfessorId)
+  }, [currentProfessorId, loadProfessorDashboard])
   const [tab, setTab] = useState<'agenda' | 'alunos'>('agenda')
   const [chamadaTurma, setChamadaTurma] = useState<Turma | null>(null)
   const [presencas, setPresencas] = useState<Record<string, boolean>>({})
@@ -133,9 +58,9 @@ export default function ProfessorDashboard() {
   }
 
   // Turmas, alunos e alertas calculados
-  const minhasTurmas = displayedTurmas.filter(t => t.professorId === professor.id)
+  const minhasTurmas = turmas.filter(t => t.professorId === professor.id)
   const turmasHoje = minhasTurmas.filter(turma => isClassScheduledOnDate(turma))
-  const meusAlunos = displayedAlunos.filter(a => a.professorId === professor.id)
+  const meusAlunos = alunos.filter(a => a.professorId === professor.id)
   const sorted = [...turmasHoje].sort((a, b) => a.horario.localeCompare(b.horario))
   const cargaHorariaHoje = formatDuration(
     turmasHoje.reduce((total, turma) => total + turma.duracaoMinutos, 0),
@@ -160,11 +85,11 @@ export default function ProfessorDashboard() {
     if (dias >= 45) alertas.push({ aluno, tipo: 'revisao', dias })
     return alertas
   }, [])
-  const treinoAluno = treinoAlunoId ? displayedAlunos.find(aluno => aluno.id === treinoAlunoId) ?? null : null
+  const treinoAluno = treinoAlunoId ? alunos.find(aluno => aluno.id === treinoAlunoId) ?? null : null
 
   // Controle da chamada
   const abrirChamada = (turma: Turma) => {
-    const alunosDaTurma = displayedAlunos.filter(aluno => turma.alunoIds.includes(aluno.id))
+    const alunosDaTurma = alunos.filter(aluno => turma.alunoIds.includes(aluno.id))
     setPresencas(Object.fromEntries(alunosDaTurma.map(aluno => [
       aluno.id,
       aluno.frequencia.find(item => item.data === hoje)?.presente ?? false,
@@ -175,10 +100,6 @@ export default function ProfessorDashboard() {
 
   const salvarChamada = async () => {
     if (!chamadaTurma) return
-    if (isPreviewMode) {
-      setChamadaFeedback('Modo de visualização: nenhuma alteração foi salva.')
-      return
-    }
     setSalvandoChamada(true)
     setChamadaFeedback('')
     try {
@@ -193,7 +114,7 @@ export default function ProfessorDashboard() {
 
   // Tela de chamada da turma selecionada
   if (chamadaTurma) {
-    const alunosDaTurma = displayedAlunos.filter(a => chamadaTurma.alunoIds.includes(a.id))
+    const alunosDaTurma = alunos.filter(a => chamadaTurma.alunoIds.includes(a.id))
     return (
       <div className="min-h-screen bg-[#0a0a0a]">
         <header className="border-b border-[#1f1f1f] px-6 py-3 flex items-center justify-between sticky top-0 bg-[#0a0a0a] z-40">
@@ -284,11 +205,6 @@ export default function ProfessorDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isPreviewMode && (
-            <button onClick={handleExitPreview} className="bg-blue-500 hover:bg-blue-400 text-white font-semibold text-xs sm:text-sm px-3 py-2 rounded-xl transition-colors">
-              Voltar para administração
-            </button>
-          )}
           <button onClick={handleLogout} aria-label="Sair" className="flex items-center gap-2 text-[#71717a] hover:text-white transition-colors text-sm">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
@@ -299,15 +215,6 @@ export default function ProfessorDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {isPreviewMode && (
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-3 flex items-start gap-3">
-            <span className="text-blue-400">👁</span>
-            <div>
-              <p className="text-blue-300 text-sm font-semibold">Visualização do perfil de professor</p>
-              <p className="text-[#a1a1aa] text-xs mt-0.5">Os dados desta tela são demonstrativos e nenhuma alteração será gravada.</p>
-            </div>
-          </div>
-        )}
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white font-mono">{getGreeting()}, {firstName}!</h1>
           <p className="text-[#71717a] text-sm mt-1">{getMotivacao()}</p>
@@ -435,7 +342,7 @@ export default function ProfessorDashboard() {
           )}
         </div>
       </main>
-      {treinoAluno && <TreinoProfessorModal aluno={treinoAluno} onClose={() => setTreinoAlunoId(null)} readOnly={isPreviewMode} />}
+      {treinoAluno && <TreinoProfessorModal aluno={treinoAluno} onClose={() => setTreinoAlunoId(null)} />}
     </div>
   )
 }

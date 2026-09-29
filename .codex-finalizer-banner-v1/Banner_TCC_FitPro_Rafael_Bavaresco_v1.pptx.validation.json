@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "presentation-finalization.v1",
+  "finalSha256": "397279db0fcd86210452f96113372ebdc0de5e46cbada983ba6ccc1bc68c510c",
+  "byteCount": 355054,
+  "packageIntegrity": {
+    "chart_count": 0,
+    "claim_boundary": "Structural package checks only; no slide text, notes, formulas, chart values, or native PowerPoint execution were inspected.",
+    "finding_count": 0,
+    "findings": [],
+    "notes_parts_skipped": 1,
+    "relationship_part_count": 17,
+    "slide_count": 1,
+    "status": "pass",
+    "exitCode": 0,
+    "findingCount": 0,
+    "warnings": []
+  },
+  "presentationLayout": {
+    "finding_count": 0,
+    "findings": [],
+    "font_policy": {
+      "checked_text_script_count": 33,
+      "native_font_rendering_verified": false,
+      "observed_font_families": [
+        "Arial",
+        "Arial Black"
+      ],
+      "observed_font_use_counts": {
+        "Arial": 30,
+        "Arial Black": 3
+      },
+      "passed": true,
+      "performed": true
+    },
+    "slide_count": 1,
+    "slide_size_in": [
+      35.4323,
+      47.2448
+    ],
+    "warning_count": 1,
+    "warnings": [
+      {
+        "kind": "object_outside_slide_boundary",
+        "object_id": "9",
+        "object_kind": "sp",
+        "slide": 1
+      }
+    ],
+    "exitCode": 0,
+    "findingCount": 0,
+    "fontPolicy": {
+      "checked_text_script_count": 33,
+      "native_font_rendering_verified": false,
+      "observed_font_families": [
+        "Arial",
+        "Arial Black"
+      ],
+      "observed_font_use_counts": {
+        "Arial": 30,
+        "Arial Black": 3
+      },
+      "passed": true,
+      "performed": true
+    }
+  },
+  "fontSelection": {
+    "basis": "reference",
+    "approvedFamilies": [
+      "Arial",
+      "Arial Black"
+    ],
+    "scriptFonts": {},
+    "referenceSha256": "1691d8a508d2146c15a1b9f89585c5c3fe2235c59fcc2469b1694a82d2432b98",
+    "referenceFontsVerifiedInEncodedText": true,
+    "checked_text_script_count": 33,
+    "native_font_rendering_verified": false,
+    "observed_font_families": [
+      "Arial",
+      "Arial Black"
+    ],
+    "observed_font_use_counts": {
+      "Arial": 30,
+      "Arial Black": 3
+    },
+    "passed": true,
+    "performed": true
+  },
+  "firstPartyImport": {
+    "performed": true,
+    "passed": true,
+    "slideCount": 1,
+    "sha256": "397279db0fcd86210452f96113372ebdc0de5e46cbada983ba6ccc1bc68c510c",
+    "runtimeNodeModules": "/home/rafael/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules",
+    "nodeExecutable": "/home/rafael/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
+  },
+  "nativeTableArithmetic": {
+    "performed": true,
+    "checked_column_count": 0,
+    "checks": [],
+    "claim_boundary": "Displayed-value arithmetic with rounding tolerance; not source-data verification.",
+    "eligible_table_count": 0,
+    "finding_count": 0,
+    "findings": [],
+    "native_table_count": 0,
+    "passed": true,
+    "schema_version": "presentation-native-table-arithmetic.v1",
+    "skipped_tables": [],
+    "slide_count": 1,
+    "warning_count": 0,
+    "warnings": []
+  },
+  "nativeChartTitles": {
+    "performed": true,
+    "checks": [],
+    "finding_count": 0,
+    "findings": [],
+    "native_chart_count": 0,
+    "native_powerpoint_verified": false,
+    "passed": true,
+    "presentation_sha256": "397279db0fcd86210452f96113372ebdc0de5e46cbada983ba6ccc1bc68c510c",
+    "schema_version": "presentation-native-chart-titles.v1",
+    "slide_count": 1,
+    "source_text_emitted": false,
+    "unresolved_linked_title_count": 0
+  },
+  "sourceDerivedPolicyFlags": [
+    "--expected-slide-size-emu",
+    "32399288,43200638",
+    "--validate-bullet-geometry",
+    "--validate-heading-fit",
+    "--cover-role",
+    "none",
+    "--expected-slide-count",
+    "1",
+    "--approved-font-family",
+    "Arial",
+    "--approved-font-family",
+    "Arial Black"
+  ],
+  "nativeChartValidation": {
+    "detectedOwnerSlides": [],
+    "detectedChartCount": 0,
+    "targetApplication": "portable",
+    "sourceChartOwnersExplicitlyDeclared": true,
+    "validatorRan": false,
+    "passed": true
+  }
+}

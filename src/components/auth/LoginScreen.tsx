@@ -88,7 +88,7 @@ export default function LoginScreen() {
     setLoading(false)
     if (!result.ok) { setError(result.error); return }
 
-    setAuth(result.role, result.userId, result.isOwner, result.isPreview, result.displayName)
+    setAuth(result.role, result.userId, result.isOwner, result.displayName)
 
     if (result.isFirstLogin) {
       setPendingFirstLogin(true)

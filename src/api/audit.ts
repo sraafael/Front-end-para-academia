@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 
+// Leitura do histórico administrativo exibido somente ao proprietário.
 export interface AuditLog {
   id: number
   actorEmail: string

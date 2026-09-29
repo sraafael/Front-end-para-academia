@@ -1,4 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { verifyPixOrder, type MercadoPagoOrder, type StoredPixCharge } from './pixOrder.ts'
+
+export type { MercadoPagoOrder, StoredPixCharge } from './pixOrder.ts'
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,14 +36,22 @@ export function pixConfigured() {
     Deno.env.get('MP_CLIENT_ID') &&
     Deno.env.get('MP_CLIENT_SECRET') &&
     Deno.env.get('MP_OAUTH_REDIRECT_URI') &&
-    Deno.env.get('MP_WEBHOOK_SECRET') &&
+    webhookSecret() &&
     Deno.env.get('FITPRO_APP_URL') &&
-    Deno.env.get('FITPRO_PIX_ENCRYPTION_KEY'),
+    Deno.env.get('FITPRO_PIX_ENCRYPTION_KEY') &&
+    (!isTestMode() || (Deno.env.get('MP_TEST_ACCESS_TOKEN') && Deno.env.get('MP_TEST_SELLER_ID'))),
   )
 }
 
 export function isTestMode() {
   return Deno.env.get('FITPRO_PIX_TEST_MODE') !== 'false'
+}
+
+// A assinatura de produção deve ser configurada separadamente antes de cobrar dinheiro real.
+function webhookSecret() {
+  return isTestMode()
+    ? Deno.env.get('MP_TEST_WEBHOOK_SECRET') || Deno.env.get('MP_WEBHOOK_SECRET')
+    : Deno.env.get('MP_PROD_WEBHOOK_SECRET')
 }
 
 // Cada token de academia é cifrado antes de entrar no banco.
@@ -82,6 +93,38 @@ export type PixConnection = {
   token_expires_at: string | null
   live_mode: boolean
   connected_at: string | null
+  use_owner_account?: boolean
+  owner_user_id?: string | null
+}
+
+// Resolve a configuração da academia e, no modo de apresentação, injeta
+// as credenciais únicas do proprietário sem copiá-las para cada unidade.
+export async function pixConnectionForAcademy(academyId: string): Promise<PixConnection | null> {
+  const client = adminClient()
+  const [{ data: academy, error: academyError }, { data: setting, error: settingError }] = await Promise.all([
+    client.from('academies').select('owner_id').eq('id', academyId).maybeSingle(),
+    client.from('academy_pix_connections').select('*').eq('academy_id', academyId).maybeSingle(),
+  ])
+  if (academyError || settingError) throw academyError ?? settingError
+  if (!setting) return null
+  if (!setting.use_owner_account) return setting as PixConnection
+  if (!academy?.owner_id) return null
+
+  const { data: ownerConnection, error } = await client.from('owner_pix_connections')
+    .select('*').eq('owner_user_id', academy.owner_id).maybeSingle()
+  if (error) throw error
+  if (!ownerConnection) return null
+
+  return {
+    ...setting,
+    seller_id: ownerConnection.seller_id,
+    access_token_encrypted: ownerConnection.access_token_encrypted,
+    refresh_token_encrypted: ownerConnection.refresh_token_encrypted,
+    token_expires_at: ownerConnection.token_expires_at,
+    live_mode: ownerConnection.live_mode,
+    connected_at: ownerConnection.connected_at,
+    owner_user_id: ownerConnection.owner_user_id,
+  } as PixConnection
 }
 
 type OAuthTokens = {
@@ -124,51 +167,31 @@ export async function accessToken(connection: PixConnection) {
     throw new Error('A conta recebedora mudou. Reconecte o Mercado Pago.')
   }
   const client = adminClient()
-  const { error } = await client.from('academy_pix_connections').update({
+  const update = {
     access_token_encrypted: await encrypt(renewed.access_token),
     refresh_token_encrypted: await encrypt(renewed.refresh_token),
     token_expires_at: new Date(Date.now() + renewed.expires_in * 1000).toISOString(),
     updated_at: new Date().toISOString(),
-  }).eq('academy_id', connection.academy_id)
+  }
+  const { error } = connection.owner_user_id
+    ? await client.from('owner_pix_connections').update(update).eq('owner_user_id', connection.owner_user_id)
+    : await client.from('academy_pix_connections').update(update).eq('academy_id', connection.academy_id)
   if (error) throw new Error('Não foi possível renovar a conexão do Mercado Pago.')
   return renewed.access_token
 }
 
-export type MercadoPagoOrder = {
-  id?: string
-  status?: string
-  status_detail?: string
-  external_reference?: string
-  total_amount?: string
-  total_paid_amount?: string
-  transactions?: {
-    payments?: Array<{
-      id?: string
-      amount?: string
-      paid_amount?: string
-      status?: string
-      status_detail?: string
-      payment_method?: {
-        id?: string
-        qr_code?: string
-        qr_code_base64?: string
-        ticket_url?: string
-      }
-    }>
-  }
-}
-
-export type StoredPixCharge = {
-  id: string
-  academy_id: string
-  amount: number
-  status: string
-  provider_order_id: string | null
+// No teste, a cobrança usa a conta de teste da aplicação, não a conta real da academia.
+export async function chargeAccessToken(connection: PixConnection) {
+  if (!isTestMode()) return accessToken(connection)
+  const token = Deno.env.get('MP_TEST_ACCESS_TOKEN')
+  if (!token) throw new Error('Credencial de teste do Mercado Pago não configurada.')
+  return token
 }
 
 export async function fetchOrder(orderId: string, token: string): Promise<MercadoPagoOrder> {
   const response = await fetch(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
   })
   if (!response.ok) throw new Error('Não foi possível conferir a cobrança no Mercado Pago.')
   return response.json() as Promise<MercadoPagoOrder>
@@ -176,19 +199,8 @@ export async function fetchOrder(orderId: string, token: string): Promise<Mercad
 
 // Só o estado consultado no Mercado Pago pode quitar uma mensalidade.
 export async function reconcilePixCharge(charge: StoredPixCharge, order: MercadoPagoOrder) {
-  if (!charge.provider_order_id || order.id !== charge.provider_order_id ||
-      order.external_reference !== charge.id || Number(order.total_amount) !== Number(charge.amount)) {
-    throw new Error('Dados da cobrança não conferem com o Mercado Pago.')
-  }
-  const payment = order.transactions?.payments?.find(item => item.payment_method?.id === 'pix')
-  if (!payment) throw new Error('O pagamento da cobrança não é Pix.')
+  const { payment, accredited } = verifyPixOrder(charge, order)
   const client = adminClient()
-  const accredited = order.status === 'processed'
-    && order.status_detail === 'accredited'
-    && payment.status === 'processed'
-    && payment.status_detail === 'accredited'
-    && Number(payment.paid_amount ?? payment.amount) === Number(charge.amount)
-    && Number(order.total_paid_amount) === Number(charge.amount)
 
   if (accredited) {
     const { error } = await client.rpc('confirm_fitpro_pix_charge', {
@@ -221,16 +233,27 @@ export async function reconcilePixCharge(charge: StoredPixCharge, order: Mercado
 
 // Assinatura HMAC documentada pelo Mercado Pago para notificações de orders.
 export async function validWebhookSignature(request: Request, orderId: string) {
-  const secret = Deno.env.get('MP_WEBHOOK_SECRET')
+  const secret = webhookSecret()
   const signature = request.headers.get('x-signature') ?? ''
   const requestId = request.headers.get('x-request-id')
   const parts = Object.fromEntries(signature.split(',').map(part => part.trim().split('=', 2)))
   const timestamp = parts.ts
   const hash = parts.v1
-  if (!secret || !requestId || !/^\d+$/.test(timestamp ?? '') || !/^[0-9a-f]{64}$/i.test(hash ?? '')) return false
+  if (!secret || !requestId || !/^\d+$/.test(timestamp ?? '') || !/^[0-9a-f]{64}$/i.test(hash ?? '')) {
+    console.warn('Assinatura Pix incompleta', {
+      secretConfigured: Boolean(secret), requestIdPresent: Boolean(requestId),
+      timestampValid: /^\d+$/.test(timestamp ?? ''), hashValid: /^[0-9a-f]{64}$/i.test(hash ?? ''),
+    })
+    return false
+  }
   // Reenvios antigos são aceitos: a consulta ao provedor e a confirmação idempotente impedem duplicidade.
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'])
   const received = Uint8Array.from((hash as string).match(/../g) ?? [], pair => parseInt(pair, 16))
-  const manifest = `id:${orderId.toLowerCase()};request-id:${requestId};ts:${timestamp};`
-  return crypto.subtle.verify('HMAC', key, received, new TextEncoder().encode(manifest))
+  // Algumas integrações assinam o ID original; outras usam a forma minúscula documentada pelo provedor.
+  for (const id of new Set([orderId, orderId.toLowerCase()])) {
+    const manifest = `id:${id};request-id:${requestId};ts:${timestamp};`
+    if (await crypto.subtle.verify('HMAC', key, received, new TextEncoder().encode(manifest))) return true
+  }
+  console.warn('Assinatura Pix não confere', { idHasUppercase: orderId !== orderId.toLowerCase() })
+  return false
 }

@@ -42,6 +42,7 @@ function AlunoPerfilModal({
   const [turmaId, setTurmaId] = useState(aluno.turmaId ?? '')
   const [status, setStatus] = useState(aluno.status)
   const [pagamentoStatus, setPagamentoStatus] = useState(aluno.pagamentoStatus)
+  const [vencimento, setVencimento] = useState(aluno.vencimento ?? '')
   const [formaPagamento, setFormaPagamento] = useState(normalizeFormaPagamento(aluno.formaPagamento))
   const [salvando, setSalvando] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -67,6 +68,7 @@ function AlunoPerfilModal({
         turmaId,
         status,
         pagamentoStatus,
+        vencimento,
         formaPagamento,
       } as Partial<Aluno>)
       setEditando(false)
@@ -267,6 +269,11 @@ function AlunoPerfilModal({
                   </div>
                 </div>
                 <div>
+                  <label className="block text-[#71717a] text-xs mb-1">Vencimento da mensalidade</label>
+                  <input type="date" value={vencimento} onChange={e => setVencimento(e.target.value)}
+                    className="w-full bg-[#1a1a1a] border border-[#2a2a2a] focus:border-[#22c55e] rounded-xl px-3 py-2 text-white text-sm outline-none transition-colors" />
+                </div>
+                <div>
                   <label className="block text-[#71717a] text-xs mb-1">Turma</label>
                   <select value={turmaId} onChange={e => setTurmaId(e.target.value)}
                     className="w-full bg-[#1a1a1a] border border-[#2a2a2a] focus:border-[#22c55e] rounded-xl px-3 py-2 text-white text-sm outline-none transition-colors">
@@ -386,6 +393,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
   const [planoId, setPlanoId] = useState('')
   const [professorId, setProfessorId] = useState('')
   const [turmaId, setTurmaId] = useState('')
+  const [vencimento, setVencimento] = useState(toLocalDate())
   const [formError, setFormError] = useState('')
   const [credencialCriada, setCredencialCriada] = useState<{ nome: string; cpf: string; senha: string } | null>(null)
 
@@ -446,6 +454,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
         matriculaData: toLocalDate(),
         status: 'ativo',
         formaPagamento: 'PIX',
+        vencimento,
       })
       setCredencialCriada({ nome: result.record.nome, cpf: result.record.cpf, senha: result.temporaryPassword })
       
@@ -459,6 +468,7 @@ export default function GerenciarAlunos({ onClose }: Props) {
       setPlanoId('')
       setProfessorId('')
       setTurmaId('')
+      setVencimento(toLocalDate())
       setFormError('')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Erro ao cadastrar aluno.')
@@ -590,6 +600,12 @@ export default function GerenciarAlunos({ onClose }: Props) {
               {professorId && turmasDisponiveis.length === 0 && (
                 <p className="text-yellow-400/80 text-xs mt-1">Esse professor não possui turma com vagas disponíveis.</p>
               )}
+            </div>
+            <div>
+              <label className="block text-[#a1a1aa] text-xs mb-1">Primeiro vencimento</label>
+              <input type="date" value={vencimento} onChange={e => setVencimento(e.target.value)} required
+                className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#22c55e] transition-colors" />
+              <p className="text-[#52525b] text-xs mt-1">Quando a primeira mensalidade deverá ser paga.</p>
             </div>
             {formError && (
               <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{formError}</p>

@@ -9,6 +9,8 @@ interface Props {
   onPendingChange: (count: number) => void
 }
 
+// Fila de pedidos de alunos. A confirmação em duas etapas evita redefinir uma
+// senha por clique acidental e a credencial temporária aparece uma única vez.
 export default function RecoveryRequests({ onClose, onPendingChange }: Props) {
   const [requests, setRequests] = useState<StudentRecoveryRequest[]>([])
   const [loading, setLoading] = useState(true)

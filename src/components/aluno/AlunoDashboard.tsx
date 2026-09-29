@@ -4,85 +4,9 @@ import type { Aluno, Plano, TreinoFicha } from '../../types'
 import { CONQUISTAS_CATALOGO } from '../../constants'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
-import { formatLocalDate, parseLocalDate, subtractLocalDays, toLocalDate } from '../../lib/date'
+import { formatLocalDate, parseLocalDate, toLocalDate } from '../../lib/date'
 import { useModalKeyboard } from '../../hooks/useModalKeyboard'
 import PixPaymentCard from './PixPaymentCard'
-
-const PREVIEW_PLAN: Plano = {
-  id: 'preview-plano',
-  nome: 'Plano Completo',
-  preco: 129.90,
-  duracao: '1 mês',
-  modalidades: ['Musculação', 'Funcional'],
-  beneficios: ['Acesso livre', 'Avaliação física'],
-  ativo: true,
-}
-
-const PREVIEW_ALUNO: Aluno = {
-  id: 'preview-aluno',
-  nome: 'Perfil de Aluno',
-  cpf: '',
-  senha: '',
-  telefone: '(00) 00000-0000',
-  email: 'aluno@academia.com',
-  idade: 26,
-  peso: 74.5,
-  planoId: PREVIEW_PLAN.id,
-  status: 'ativo',
-  matriculaData: subtractLocalDays(45),
-  isFirstLogin: false,
-  historicoPeso: [
-    { data: subtractLocalDays(40), peso: 77.2 },
-    { data: subtractLocalDays(25), peso: 76.1 },
-    { data: subtractLocalDays(10), peso: 75.2 },
-    { data: toLocalDate(), peso: 74.5 },
-  ],
-  frequencia: [
-    { data: subtractLocalDays(4), presente: true },
-    { data: subtractLocalDays(2), presente: true },
-  ],
-  treinos: [{
-    id: 'preview-treino-a',
-    nome: 'Treino A',
-    grupo: 'Peito e tríceps',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    exercicios: [
-      {
-        id: 'preview-supino',
-        nome: 'Supino reto',
-        series: 3,
-        reps: 10,
-        cargaSugerida: 30,
-        seriesRealizadas: [1, 2, 3].map((serieNum, index) => ({
-          serieNum,
-          cargaReal: 30,
-          repeticoes: 10,
-          concluida: index === 0,
-        })),
-      },
-      {
-        id: 'preview-triceps',
-        nome: 'Tríceps na polia',
-        series: 3,
-        reps: 12,
-        cargaSugerida: 20,
-        seriesRealizadas: [1, 2, 3].map(serieNum => ({
-          serieNum,
-          cargaReal: 20,
-          repeticoes: 12,
-          concluida: false,
-        })),
-      },
-    ],
-  }],
-  sequencia: 3,
-  metaSemanal: { meta: 3, concluidos: 2 },
-  conquistasDesbloqueadas: CONQUISTAS_CATALOGO.slice(0, 2).map(conquista => conquista.id),
-  formaPagamento: 'PIX',
-  pagamentoStatus: 'pago',
-  vencimento: subtractLocalDays(-15),
-}
 
 // Saudação e mensagem contextual
 function getGreeting(nome: string): string {
@@ -475,7 +399,7 @@ function TreinoTab({ treino, onCheckSerie }: { treino: TreinoFicha; onCheckSerie
 }
 
 // Mensalidade e forma de pagamento
-function MensalidadeTab({ aluno, plano, preview, onPaid }: { aluno: Aluno; plano: Plano | undefined; preview: boolean; onPaid: () => void }) {
+function MensalidadeTab({ aluno, plano, onPaid }: { aluno: Aluno; plano: Plano | undefined; onPaid: () => void }) {
   const statusMap = {
     pago: { label: 'Em dia', cls: 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]/30' },
     pendente: { label: 'Pagamento pendente', cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
@@ -513,7 +437,7 @@ function MensalidadeTab({ aluno, plano, preview, onPaid }: { aluno: Aluno; plano
         {aluno.pagamentoStatus !== 'pago' && (
           <div className="mt-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-3">
             <p className="text-yellow-300 text-sm font-semibold">Pagamento pendente</p>
-            <PixPaymentCard dueDate={aluno.vencimento} preview={preview} onPaid={onPaid} />
+            <PixPaymentCard dueDate={aluno.vencimento} onPaid={onPaid} />
           </div>
         )}
       </div>
@@ -538,11 +462,11 @@ function MensalidadeTab({ aluno, plano, preview, onPaid }: { aluno: Aluno; plano
 // Painel principal do aluno
 export default function AlunoDashboard() {
   const navigate = useNavigate()
-  const { currentAlunoId, logout, isPreviewMode, exitPreview } = useAuthStore()
+  const { currentAlunoId, logout } = useAuthStore()
   const { alunos, planos, loadAluno, updatePeso, checkSerie, loading } = useDataStore()
   
-  const aluno = isPreviewMode ? PREVIEW_ALUNO : alunos.find(a => a.id === currentAlunoId)
-  const plano = isPreviewMode ? PREVIEW_PLAN : planos.find(p => p.id === aluno?.planoId)
+  const aluno = alunos.find(a => a.id === currentAlunoId)
+  const plano = planos.find(p => p.id === aluno?.planoId)
 
   // Estado local e carregamento
   const [tab, setTab] = useState<string>('')
@@ -551,8 +475,8 @@ export default function AlunoDashboard() {
   const treinoIds = aluno?.treinos.map(treino => treino.id).join('|') ?? ''
 
   useEffect(() => {
-    if (currentAlunoId && !isPreviewMode) loadAluno(currentAlunoId)
-  }, [currentAlunoId, isPreviewMode, loadAluno])
+    if (currentAlunoId) loadAluno(currentAlunoId)
+  }, [currentAlunoId, loadAluno])
 
   useEffect(() => {
     if (!aluno) return
@@ -576,14 +500,9 @@ export default function AlunoDashboard() {
 
   // Ações do painel
   const onLogout = () => { logout(); navigate('/login') }
-  const onExitPreview = () => { exitPreview(); navigate('/admin/dashboard') }
-  const onUpdatePeso = (p: number) => isPreviewMode
-    ? Promise.reject(new Error('Modo de visualização: nenhuma alteração foi salva.'))
-    : updatePeso(aluno.id, p)
+  const onUpdatePeso = (p: number) => updatePeso(aluno.id, p)
   const onCheckSerie = (treinoId: string, exId: string, sn: number, carga: number, reps: number) =>
-    isPreviewMode
-      ? Promise.reject(new Error('Modo de visualização: nenhuma alteração foi salva.'))
-      : checkSerie(aluno.id, treinoId, exId, sn, carga, reps)
+    checkSerie(aluno.id, treinoId, exId, sn, carga, reps)
 
   const pesoAtual = aluno.historicoPeso[aluno.historicoPeso.length - 1]?.peso
     ?? (aluno.peso > 0 ? aluno.peso : undefined)
@@ -604,11 +523,6 @@ export default function AlunoDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isPreviewMode && (
-            <button onClick={onExitPreview} className="bg-[#22c55e] hover:bg-[#16a34a] text-black font-semibold text-xs sm:text-sm px-3 py-2 rounded-xl transition-colors">
-              Voltar para administração
-            </button>
-          )}
           <button onClick={onLogout} aria-label="Sair da conta" className="flex items-center gap-2 text-[#71717a] hover:text-white transition-colors text-sm">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
@@ -619,15 +533,6 @@ export default function AlunoDashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {isPreviewMode && (
-          <div className="bg-[#22c55e]/10 border border-[#22c55e]/30 rounded-2xl px-4 py-3 flex items-start gap-3">
-            <span className="text-[#22c55e]">👁</span>
-            <div>
-              <p className="text-[#22c55e] text-sm font-semibold">Visualização do perfil de aluno</p>
-              <p className="text-[#a1a1aa] text-xs mt-0.5">Os dados desta tela são demonstrativos e nenhuma alteração será gravada.</p>
-            </div>
-          </div>
-        )}
         {/* Greeting */}
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white font-mono">{getGreeting(aluno.nome)}</h1>
@@ -733,7 +638,7 @@ export default function AlunoDashboard() {
               <TreinoTab key={t.id} treino={t}
                 onCheckSerie={(exId, serieNum, carga, reps) => onCheckSerie(t.id, exId, serieNum, carga, reps)} />
             ))}
-            {tab === 'mensalidade' && <MensalidadeTab aluno={aluno} plano={plano} preview={isPreviewMode} onPaid={() => void loadAluno(aluno.id)} />}
+            {tab === 'mensalidade' && <MensalidadeTab aluno={aluno} plano={plano} onPaid={() => void loadAluno(aluno.id)} />}
             {aluno.treinos.length === 0 && tab !== 'mensalidade' && (
               <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl p-10 text-center">
                 <p className="text-[#52525b]">Nenhuma ficha de treino cadastrada ainda.</p>

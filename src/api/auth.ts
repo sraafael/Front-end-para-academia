@@ -1,10 +1,11 @@
 import { supabase } from '../lib/supabase'
 import type { UserRole } from '../types'
 import { isValidCpf } from '../lib/cpf'
+import { trustedUserRole } from '../lib/authRole'
 
 // Tipos e identificação do usuário
 export type LoginResult =
-  | { ok: true; role: UserRole; userId: string | null; displayName: string; isFirstLogin?: boolean; isOwner: boolean; isPreview: boolean }
+  | { ok: true; role: UserRole; userId: string | null; displayName: string; isFirstLogin?: boolean; isOwner: boolean }
   | { ok: false; error: string }
 
 /** Converte CPF e perfil no e-mail interno usado pelo Supabase Auth. */
@@ -46,20 +47,11 @@ export async function login(role: UserRole, cpf: string, senha: string): Promise
     return { ok: false, error: 'Erro ao conectar com o servidor. Tente novamente.' }
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', data.user.id)
-    .maybeSingle()
-  const userRole = (data.user?.app_metadata?.role
-    ?? profile?.role
-    ?? data.user?.user_metadata?.role) as UserRole | undefined
+  const userRole = trustedUserRole(data.user.email, data.user.app_metadata)
   let entityId: string | null = null
   let isFirstLogin = false
   let displayName = String(data.user.user_metadata?.nome ?? '').trim()
-  const isOwner = data.user.email?.toLowerCase() === 'admin@fitpro.internal'
-    || data.user.app_metadata?.is_owner === true
-  const isPreview = false
+  const isOwner = userRole === 'owner'
 
   if (role === 'owner' && !isOwner) {
     await supabase.auth.signOut()
@@ -117,7 +109,7 @@ export async function login(role: UserRole, cpf: string, senha: string): Promise
     displayName = row.nome?.trim() || displayName
   }
 
-  return { ok: true, role, userId: entityId, displayName, isFirstLogin, isOwner, isPreview }
+  return { ok: true, role, userId: entityId, displayName, isFirstLogin, isOwner }
 }
 
 // Primeiro acesso

@@ -1,4 +1,4 @@
-import { accessToken, adminClient, fetchOrder, json, reconcilePixCharge, validWebhookSignature, type PixConnection } from '../_shared/pix.ts'
+import { adminClient, chargeAccessToken, fetchOrder, isTestMode, json, pixConnectionForAcademy, reconcilePixCharge, validWebhookSignature, type PixConnection } from '../_shared/pix.ts'
 
 type Charge = {
   id: string
@@ -33,17 +33,15 @@ Deno.serve(async request => {
       .eq('provider_order_id', orderId).maybeSingle()
     if (chargeError) throw chargeError
     if (!charge) return json({ error: 'Cobrança ainda não disponível.' }, 503)
-    if (charge.status === 'paid' || charge.status === 'review') return json({ ok: true })
-
-    const { data: connection, error: connectionError } = await client.from('academy_pix_connections')
-      .select('*').eq('academy_id', charge.academy_id).maybeSingle()
-    if (connectionError || !connection?.seller_id) throw connectionError ?? new Error('Conta da academia não conectada.')
-    if (String(event.user_id ?? '') !== String(connection.seller_id) || Boolean(event.live_mode) !== charge.live_mode) {
+    const connection = await pixConnectionForAcademy(charge.academy_id)
+    if (!connection?.seller_id) throw new Error('Conta da academia não conectada.')
+    if (String(event.user_id ?? '') !== String(isTestMode() ? Deno.env.get('MP_TEST_SELLER_ID') : connection.seller_id) || Boolean(event.live_mode) !== charge.live_mode) {
       return json({ error: 'Recebedor ou ambiente não confere.' }, 403)
     }
+    if (charge.status === 'paid' || charge.status === 'review') return json({ ok: true })
 
     // A notificação só avisa: o servidor busca o estado definitivo no provedor.
-    const token = await accessToken(connection as PixConnection)
+    const token = await chargeAccessToken(connection as PixConnection)
     const order = await fetchOrder(orderId, token)
     await reconcilePixCharge(charge, order)
     return json({ ok: true })

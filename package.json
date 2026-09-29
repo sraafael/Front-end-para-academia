@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:pix": "vite --host 127.0.0.1 --mode pix-test --port 8444 --strictPort",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",

@@ -5,6 +5,10 @@ verify_jwt = false
 [functions.pix-webhook]
 verify_jwt = false
 
+# O agendamento usa um segredo próprio, guardado no Vault e na Edge Function.
+[functions.pix-reconcile]
+verify_jwt = false
+
 # O aluno envia o pedido sem estar autenticado; ações administrativas verificam a sessão na função.
 [functions.student-recovery]
 verify_jwt = false

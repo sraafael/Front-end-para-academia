@@ -7,7 +7,6 @@ import { useModalKeyboard } from '../../hooks/useModalKeyboard'
 interface Props {
   aluno: Aluno
   onClose: () => void
-  readOnly?: boolean
 }
 
 interface ExercicioDraft {
@@ -33,7 +32,7 @@ function diasDesde(data?: string) {
   return Math.max(0, Math.floor((Date.now() - new Date(data).getTime()) / 86_400_000))
 }
 
-export default function TreinoProfessorModal({ aluno, onClose, readOnly = false }: Props) {
+export default function TreinoProfessorModal({ aluno, onClose }: Props) {
   useModalKeyboard(onClose)
 
   // Estado do formulário
@@ -92,11 +91,6 @@ export default function TreinoProfessorModal({ aluno, onClose, readOnly = false 
     setError('')
     setSuccess('')
 
-    if (readOnly) {
-      setError('Modo de visualização: nenhuma alteração será salva.')
-      return
-    }
-
     const ficha: TreinoFichaInput = {
       nome: nome.trim(),
       grupo: grupo.trim(),
@@ -150,11 +144,6 @@ export default function TreinoProfessorModal({ aluno, onClose, readOnly = false 
         </div>
 
         <div className="flex-1 overflow-auto p-4 sm:p-5">
-          {readOnly && (
-            <p className="text-blue-300 text-xs bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 mb-4">
-              Visualização demonstrativa: os controles de edição não salvam alterações.
-            </p>
-          )}
           {editando ? (
             <form onSubmit={handleSave} className="space-y-5">
               <div className="grid sm:grid-cols-2 gap-3">

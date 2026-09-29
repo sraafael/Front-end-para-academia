@@ -3,7 +3,6 @@ import { pixApi, type PixCharge } from '../../api/pix'
 
 interface Props {
   dueDate?: string
-  preview: boolean
   onPaid: () => void
 }
 
@@ -19,7 +18,7 @@ function safeTicketUrl(value: string | null) {
   }
 }
 
-export default function PixPaymentCard({ dueDate, preview, onPaid }: Props) {
+export default function PixPaymentCard({ dueDate, onPaid }: Props) {
   const [available, setAvailable] = useState(false)
   const [testMode, setTestMode] = useState(false)
   const [charge, setCharge] = useState<PixCharge | null>(null)
@@ -41,7 +40,6 @@ export default function PixPaymentCard({ dueDate, preview, onPaid }: Props) {
   }
 
   useEffect(() => {
-    if (preview) return
     let active = true
     pixApi.myStatus().then(result => {
       if (!active) return
@@ -55,13 +53,13 @@ export default function PixPaymentCard({ dueDate, preview, onPaid }: Props) {
       }
     }).catch(() => { /* O pagamento manual continua disponível se o serviço estiver fora do ar. */ })
     return () => { active = false }
-  }, [dueDate, preview])
+  }, [dueDate])
 
   useEffect(() => {
-    if (preview || !charge || !['creating', 'pending'].includes(charge.status)) return
+    if (!charge || !['creating', 'pending'].includes(charge.status)) return
     const timer = window.setInterval(() => { void refresh().catch(() => null) }, 15_000)
     return () => window.clearInterval(timer)
-  }, [charge?.id, charge?.status, dueDate, preview])
+  }, [charge?.id, charge?.status, dueDate])
 
   const create = async () => {
     setError('')
@@ -90,7 +88,7 @@ export default function PixPaymentCard({ dueDate, preview, onPaid }: Props) {
 
   // Desativar novos Pix não esconde uma cobrança que o aluno já recebeu.
   const existingCharge = charge && ['creating', 'pending', 'paid', 'review'].includes(charge.status)
-  if (preview || (!available && !existingCharge)) {
+  if (!available && !existingCharge) {
     return <p className="mt-1 text-xs text-[#a1a1aa]">Solicite a chave Pix ou outra forma de pagamento diretamente à recepção. Esta academia não oferece cobrança online no momento.</p>
   }
 

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import { useDataStore } from './dataStore'
 import type { UserRole } from '../types'
+import { trustedUserRole } from '../lib/authRole'
 
 // Dados da sessão usados pelos painéis.
 interface AuthState {
@@ -11,13 +12,11 @@ interface AuthState {
   currentAdminId: string | null
   displayName: string
   isOwner: boolean
-  isPreviewMode: boolean
   isAuthenticated: boolean
   pendingFirstLogin: boolean
   hydrating: boolean
 
-  setAuth: (role: UserRole, userId: string | null, isOwner?: boolean, isPreviewMode?: boolean, displayName?: string) => void
-  exitPreview: () => void
+  setAuth: (role: UserRole, userId: string | null, isOwner?: boolean, displayName?: string) => void
   setPendingFirstLogin: (value: boolean) => void
   clearSession: () => void
   logout: () => Promise<void>
@@ -31,7 +30,6 @@ const loggedOutState = {
   currentAdminId: null,
   displayName: '',
   isOwner: false,
-  isPreviewMode: false,
   isAuthenticated: false,
   pendingFirstLogin: false,
   hydrating: false,
@@ -41,7 +39,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   ...loggedOutState,
   hydrating: true,
 
-  setAuth: (role, userId, isOwner = false, isPreviewMode = false, displayName = '') => set({
+  setAuth: (role, userId, isOwner = false, displayName = '') => set({
     role,
     isAuthenticated: true,
     currentAlunoId: role === 'aluno' ? userId : null,
@@ -49,20 +47,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     currentAdminId: role === 'owner' || role === 'admin' ? userId : null,
     displayName: displayName.trim(),
     isOwner,
-    isPreviewMode,
-    pendingFirstLogin: false,
-    hydrating: false,
-  }),
-
-  exitPreview: () => set({
-    role: 'owner',
-    currentAlunoId: null,
-    currentProfessorId: null,
-    currentAdminId: null,
-    displayName: 'Proprietário',
-    isAuthenticated: true,
-    isOwner: true,
-    isPreviewMode: false,
     pendingFirstLogin: false,
     hydrating: false,
   }),
@@ -88,21 +72,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         return
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .maybeSingle()
-
-      const metadataRole = session.user.app_metadata?.role as UserRole | undefined
-      const isOwnerEmail = session.user.email?.toLowerCase() === 'admin@fitpro.internal'
-      const isOwner = isOwnerEmail || session.user.app_metadata?.is_owner === true
-      const fallbackRole = (profile?.role ?? metadataRole ?? session.user.user_metadata?.role) as UserRole | undefined
-      const role: UserRole | undefined = isOwnerEmail
-        ? 'owner'
-        : metadataRole === 'admin'
-          ? 'admin'
-          : fallbackRole === 'admin' ? undefined : fallbackRole
+      const role = trustedUserRole(session.user.email, session.user.app_metadata)
+      const isOwner = role === 'owner'
 
       if (!role || !['owner', 'admin', 'professor', 'aluno'].includes(role)) {
         get().clearSession()
@@ -154,7 +125,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         currentAdminId: role === 'owner' || role === 'admin' ? entityId : null,
         displayName,
         isOwner,
-        isPreviewMode: false,
         pendingFirstLogin: isFirstLogin,
         hydrating: false,
       })
