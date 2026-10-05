@@ -103,7 +103,7 @@ export default function ProfessorDashboard() {
     setSalvandoChamada(true)
     setChamadaFeedback('')
     try {
-      await saveAttendance(chamadaTurma.id, presencas, hoje)
+      await saveAttendance(presencas, hoje)
       setChamadaFeedback('Chamada salva no histórico dos alunos.')
     } catch (err) {
       setChamadaFeedback(err instanceof Error ? err.message : 'Não foi possível salvar a chamada.')

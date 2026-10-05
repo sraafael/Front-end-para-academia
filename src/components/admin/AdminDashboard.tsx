@@ -35,6 +35,7 @@ export default function AdminDashboard() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
+  // Atualiza o contador de pedidos de senha ao voltar à aba e a cada minuto.
   useEffect(() => {
     let active = true
     const refresh = () => {
@@ -48,6 +49,7 @@ export default function AdminDashboard() {
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh) }
   }, [])
 
+  // Consome o resultado do retorno da conexão Pix e abre a janela correspondente.
   useEffect(() => {
     const url = new URL(window.location.href)
     const result = url.searchParams.get('pix')
@@ -301,6 +303,7 @@ export default function AdminDashboard() {
         </div>
       </main>
 
+      {/* Janelas abertas pelos atalhos; somente a janela selecionada é montada. */}
       {modal === 'alunos' && <GerenciarAlunos onClose={() => setModal(null)} />}
       {modal === 'professores' && <GerenciarProfessores onClose={() => setModal(null)} />}
       {modal === 'financeiro' && <Financeiro onClose={() => setModal(null)} />}

@@ -3,12 +3,12 @@ import type { UserRole } from '../types'
 import { isValidCpf } from '../lib/cpf'
 import { trustedUserRole } from '../lib/authRole'
 
-// Tipos e identificação do usuário
+// Resultado do login  
 export type LoginResult =
   | { ok: true; role: UserRole; userId: string | null; displayName: string; isFirstLogin?: boolean; isOwner: boolean }
   | { ok: false; error: string }
 
-/** Converte CPF e perfil no e-mail interno usado pelo Supabase Auth. */
+// Converte CPF e perfil no e-mail interno usado pelo Supabase Auth.
 function cpfToEmail(role: UserRole, cpf: string): string {
   const digits = cpf.replace(/\D/g, '')
   if (role === 'admin') {
@@ -118,8 +118,8 @@ export async function confirmFirstLogin(role: UserRole, entityId: string, novaSe
   const { error: passErr } = await supabase.auth.updateUser({ password: novaSenha })
   if (passErr) throw new Error(passErr.message)
 
-  // 2. Remove a flag apenas do perfil pertencente a esta sessão. A função
-  // protegida evita que as regras de acesso silenciosamente atualizem zero linhas.
+  // 2. Remove a flag apenas do perfil pertencente a esta sessão 
+  // A função protegida evita que as regras de acesso silenciosamente atualizem zero linhas.
   const { error: rowErr } = await supabase.rpc('complete_first_login_profile', {
     p_role: role,
     p_entity_id: entityId,

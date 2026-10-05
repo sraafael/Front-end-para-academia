@@ -10,7 +10,7 @@ import type {
   AlunoStatus, PagamentoStatus, TreinoFicha, TreinoFichaInput, HistoricoPesoEntry, FrequenciaEntry,
 } from '../types'
 
-// DB row → frontend type mappers
+// Conversão dos registros do Supabase para os nomes e tipos usados pela interface.
 function mapPlano(r: Record<string, unknown>): Plano {
   return {
     id:          r.id as string,
@@ -28,7 +28,6 @@ function mapProfessor(r: Record<string, unknown>): Professor {
     id:           r.id as string,
     nome:         r.nome as string,
     cpf:          r.cpf as string,
-    senha:        '',
     telefone:     r.telefone as string,
     email:        r.email as string,
     horario:      r.horario as string,
@@ -64,7 +63,6 @@ function mapAluno(
     id:                      r.id as string,
     nome:                    r.nome as string,
     cpf:                     r.cpf as string,
-    senha:                   '',
     telefone:                r.telefone as string,
     email:                   r.email as string,
     idade:                   Number(r.idade),
@@ -153,8 +151,8 @@ function mapTransacao(r: Record<string, unknown>): Transacao {
   }
 }
 
-// Store
-type CreateAlunoPayload = Omit<Aluno, 'id' | 'historicoPeso' | 'frequencia' | 'treinos' | 'sequencia' | 'metaSemanal' | 'conquistasDesbloqueadas' | 'pagamentoStatus' | 'isFirstLogin' | 'senha'>
+// Contrato da store: dados compartilhados e operações disponíveis para os painéis.
+type CreateAlunoPayload = Omit<Aluno, 'id' | 'historicoPeso' | 'frequencia' | 'treinos' | 'sequencia' | 'metaSemanal' | 'conquistasDesbloqueadas' | 'pagamentoStatus' | 'isFirstLogin'>
 type CreatedAccount<T> = { record: T; temporaryPassword: string }
 
 interface DataState {
@@ -175,10 +173,10 @@ interface DataState {
   updateAluno: (id: string, data: Partial<Aluno>) => Promise<void>
   updatePeso: (alunoId: string, novoPeso: number) => Promise<void>
   checkSerie: (alunoId: string, treinoId: string, exercicioId: string, serieNum: number, cargaReal: number, reps: number) => Promise<void>
-  saveAttendance: (turmaId: string, presencas: Record<string, boolean>, data?: string) => Promise<void>
+  saveAttendance: (presencas: Record<string, boolean>, data?: string) => Promise<void>
   saveTreino: (alunoId: string, treinoId: string | null, ficha: TreinoFichaInput) => Promise<void>
 
-  addProfessor: (data: Omit<Professor, 'id' | 'senha'>) => Promise<CreatedAccount<Professor>>
+  addProfessor: (data: Omit<Professor, 'id'>) => Promise<CreatedAccount<Professor>>
   updateProfessor: (id: string, data: Partial<Professor>) => Promise<void>
   resetProfessorPassword: (id: string) => Promise<CreatedAccount<Professor>>
 
@@ -201,7 +199,8 @@ const emptyData = () => ({
   error: null,
 })
 
-// Controle de carregamentos concorrentes
+// Reutiliza carregamentos em andamento. A geração muda no logout para descartar
+// respostas antigas, mesmo quando o cancelamento da requisição chega tarde.
 let dataGeneration = 0
 const activeLoadControllers = new Set<AbortController>()
 let activeLoadAll: { generation: number; promise: Promise<void> } | null = null
@@ -224,7 +223,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     set(emptyData())
   },
 
-  // Dados dos painéis do administrador e do professor.
+  // Carrega os cadastros e indicadores do painel administrativo.
   loadAll: () => {
     if (activeLoadAll?.generation === dataGeneration) {
       return activeLoadAll.promise
@@ -455,7 +454,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     return promise
   },
 
-  // Mutations
+  // Cadastro de alunos: o servidor cria a conta e devolve o acesso temporário.
   addAluno: async (data) => {
     const hoje = toLocalDate()
     if (!isValidCpf(data.cpf)) throw new Error('Informe um CPF válido.')
@@ -490,6 +489,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     return { record: novo, temporaryPassword: result.temporaryPassword }
   },
 
+  // Atualiza o cadastro; o vínculo com a turma passa pela função do banco.
   updateAluno: async (id, data) => {
     const updates: Record<string, unknown> = {}
     if (data.turmaId !== undefined) {
@@ -532,6 +532,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     }))
   },
 
+  // Registra o peso atual e seu histórico pela mesma operação no banco.
   updatePeso: async (alunoId, novoPeso) => {
     const hoje = toLocalDate()
     const { error } = await supabase.rpc('registrar_peso', {
@@ -549,6 +550,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     }))
   },
 
+  // Atualiza a série imediatamente na tela e restaura o estado se a gravação falhar.
   checkSerie: async (alunoId, treinoId, exercicioId, serieNum, cargaReal, reps) => {
     const estadoAnterior = get().alunos
     set(s => ({
@@ -595,7 +597,9 @@ export const useDataStore = create<DataState>()((set, get) => ({
     }
   },
 
-  saveAttendance: async (_turmaId, presencas, data) => {
+  // A frequência é diária por aluno; a tela já seleciona os alunos da turma.
+  // Salvar novamente substitui a chamada do dia e recalcula metas e conquistas.
+  saveAttendance: async (presencas, data) => {
     const dataChamada = data ?? toLocalDate()
     const rows = Object.entries(presencas).map(([alunoId, presente]) => ({
       aluno_id: alunoId,
@@ -638,6 +642,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     }))
   },
 
+  // Salva ficha e exercícios no servidor e recarrega a versão persistida.
   saveTreino: async (alunoId, treinoId, ficha) => {
     const { data: savedId, error: saveError } = await supabase.rpc('salvar_ficha_treino', {
       p_treino_id: treinoId,
@@ -679,6 +684,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     }))
   },
 
+  // Cadastro de professores e gerenciamento do acesso temporário.
   addProfessor: async (data) => {
     if (!isValidCpf(data.cpf)) throw new Error('Informe um CPF válido.')
     const cpfLimpo = onlyCpfDigits(data.cpf)
@@ -726,6 +732,7 @@ export const useDataStore = create<DataState>()((set, get) => ({
     return { record: professor, temporaryPassword: result.temporaryPassword }
   },
 
+  // Cadastros administrativos de turmas e planos.
   addTurma: async (data) => {
     const row = {
       nome:         data.nome,
@@ -763,6 +770,8 @@ export const useDataStore = create<DataState>()((set, get) => ({
     set(s => ({ planos: s.planos.map(p => p.id === id ? { ...p, ...data } : p) }))
   },
 
+  // Mensalidades quitadas usam uma operação própria para sincronizar o vencimento
+  // do aluno com o lançamento financeiro; os demais lançamentos seguem abaixo.
   addTransacao: async (data) => {
     const isMonthlyPayment = data.tipo === 'receita'
       && data.categoria === 'Mensalidade'

@@ -10,6 +10,7 @@ interface Props {
 export default function ProtectedRoute({ role }: Props) {
   const { isAuthenticated, role: userRole, pendingFirstLogin, hydrating } = useAuthStore()
 
+  // Aguarda a restauração da sessão antes de decidir qualquer redirecionamento.
   if (hydrating) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center" role="status" aria-label="Verificando acesso">

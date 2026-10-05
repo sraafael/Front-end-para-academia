@@ -59,12 +59,11 @@ export interface FrequenciaEntry {
   presente: boolean
 }
 
-// Entidades principais
+// Entidades principais. Senhas temporárias são retornadas separadamente pelo servidor.
 export interface Aluno {
   id: string
   nome: string
   cpf: string
-  senha: string
   telefone: string
   email: string
   idade: number
@@ -90,7 +89,6 @@ export interface Professor {
   id: string
   nome: string
   cpf: string
-  senha: string
   telefone: string
   email: string
   horario: string
@@ -143,5 +141,4 @@ export interface Conquista {
   descricao: string
   icon: string
   nivel: 'bronze' | 'prata' | 'ouro' | 'platina'
-  criterio: string
 }

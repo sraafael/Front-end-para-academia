@@ -39,6 +39,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   ...loggedOutState,
   hydrating: true,
 
+  // Preenche a sessão após o login; cada perfil recebe apenas seu identificador.
   setAuth: (role, userId, isOwner = false, displayName = '') => set({
     role,
     isAuthenticated: true,
@@ -63,6 +64,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     await supabase.auth.signOut().catch(() => null)
   },
 
+  // Restaura a sessão e consulta o cadastro para confirmar acesso e primeiro login.
   initialize: async () => {
     set({ hydrating: true })
     try {
