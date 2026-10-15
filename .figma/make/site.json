@@ -1,5 +1,7 @@
 {
-  "description": "Manage gym operations efficiently with a user-friendly dashboard for member registration, financial tracking, and secure password recovery via WhatsApp.",
+  "title": "FitPro",
+  "description": "Gestão de academia em um só lugar. Acesse treinos, acompanhe alunos e organize sua rotina com o FitPro.",
+  "language": "pt-BR",
   "robots": {
     "index": false
   },
