@@ -1,0 +1,5 @@
+# Complemento apenas para testar localmente, sem o proxy do Coolify.
+services:
+  frontend:
+    ports:
+      - "127.0.0.1:8080:80"

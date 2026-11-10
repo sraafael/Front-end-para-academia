@@ -1,0 +1,11 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?}
+    restart: unless-stopped
+    expose:
+      - "80"

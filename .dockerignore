@@ -1,0 +1,18 @@
+# Somente os arquivos necessários à compilação entram na imagem.
+**
+!package.json
+!pnpm-lock.yaml
+!index.html
+!vite.config.ts
+!tsconfig*.json
+!src/
+!src/**
+!utils/
+!utils/**
+!public/
+!public/**
+!.figma/
+!.figma/make/
+!.figma/make/site.json
+!docker/
+!docker/nginx.conf

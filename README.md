@@ -47,6 +47,12 @@ Abra o endereço informado pelo Vite. A chave presente em `utils/supabase/info.t
 
 Esta cópia do frontend aponta para um projeto Supabase específico. Para reproduzir a instalação em outro projeto, é preciso configurar outro identificador/chave pública, aplicar e verificar as migrações SQL e publicar as Edge Functions. O arquivo `supabase/schema.sql` é uma referência do esquema inicial; as migrações posteriores também fazem parte do estado atual. Não aplique os scripts diretamente em um banco com dados importantes sem antes fazer backup e validar a ordem das alterações.
 
+## Publicação com Docker e Coolify
+
+O frontend pode rodar no Coolify enquanto o banco, a autenticação e as Edge
+Functions continuam no Supabase. Consulte o [guia de implantação](docs/deploy-coolify.md)
+para configurar o Compose, as variáveis públicas e o domínio.
+
 ## Conferência do código
 
 ```bash
