@@ -1,0 +1,57 @@
+name: CI FitPro
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Tipos build e container
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: https://example.supabase.co
+      VITE_SUPABASE_ANON_KEY: public-ci-validation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar pnpm
+        run: npm install --global pnpm@10.34.3
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+      - name: Verificar TypeScript
+        run: pnpm typecheck
+      - name: Compilar frontend
+        run: pnpm build
+      - name: Validar Compose
+        run: docker compose config --quiet
+      - name: Construir imagem Docker
+        run: |
+          docker build --build-arg VITE_SUPABASE_URL \
+            --build-arg VITE_SUPABASE_ANON_KEY -t fitpro:ci .
+      - name: Testar servidor e rotas React
+        run: |
+          docker run -d --name fitpro-ci -p 127.0.0.1:8080:80 fitpro:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/health; then break; fi
+            sleep 1
+          done
+          test "$(curl --fail --silent http://127.0.0.1:8080/health)" = ok
+          curl --fail --silent http://127.0.0.1:8080/ > /tmp/index.html
+          curl --fail --silent http://127.0.0.1:8080/admin > /tmp/route.html
+          cmp /tmp/index.html /tmp/route.html
+          asset=$(grep -oE '/assets/index-[^" ]+\.js' /tmp/index.html | head -1)
+          test -n "$asset"
+          curl --fail --silent "http://127.0.0.1:8080$asset" > /tmp/app.js
+          grep -q 'https://example.supabase.co' /tmp/app.js
+      - name: Encerrar container de teste
+        if: always()
+        run: docker rm -f fitpro-ci || true

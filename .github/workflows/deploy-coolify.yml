@@ -1,0 +1,46 @@
+name: CD Coolify
+
+on:
+  workflow_run:
+    workflows: [CI FitPro]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coolify-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Solicitar deploy no Coolify
+    if: >-
+      vars.COOLIFY_DEPLOY_ENABLED == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event != 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Conferir configuracao e versao atual
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          test -n "$COOLIFY_WEBHOOK" || { echo 'Secret COOLIFY_WEBHOOK ausente'; exit 1; }
+          test -n "$COOLIFY_TOKEN" || { echo 'Secret COOLIFY_TOKEN ausente'; exit 1; }
+          current=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          test "$current" = "$TESTED_SHA" || { echo 'A main mudou. Aguarde a validacao mais recente.'; exit 1; }
+      - name: Acionar entrega da main validada
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --request POST "$COOLIFY_WEBHOOK" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN"
+          echo 'Pedido enviado. Confirme o resultado em Deployment Logs no Coolify.' >> "$GITHUB_STEP_SUMMARY"
